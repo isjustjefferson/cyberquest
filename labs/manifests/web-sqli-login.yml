@@ -1,0 +1,42 @@
+slug: "web-sqli-login"
+title: "Bypass de login com SQL Injection"
+description: "Explore uma consulta SQL vulnerável em um alvo descartável, acesse o painel e encontre um IDOR."
+difficulty: 3
+ttl_minutes: 35
+xp_reward: 200
+network:
+  internal: true
+containers:
+  attacker:
+    image: "cyberquest/attacker:latest"
+    hostname: "attacker"
+  targets:
+    - name: "target"
+      image: "cyberquest/target:latest"
+      hostname: "target"
+      env:
+        CQ_LAB: "web-sqli-login"
+      expose_web_port: 8080
+      healthcheck:
+        path: "/health"
+        timeout_s: 30
+objectives:
+  - id: "bypass-login"
+    title: "Faça bypass do login com uma injeção SQL"
+    xp: 80
+    hints:
+      - text: "Envie o formulário com o usuário ' OR '1'='1."
+        cost_bits: 10
+  - id: "admin-panel"
+    title: "Acesse o painel administrativo após o bypass"
+    xp: 70
+    hints:
+      - text: "Após o login, abra /admin?admin=1."
+        cost_bits: 8
+  - id: "idor-user"
+    title: "Acesse o perfil de outro usuário em /users?id=2"
+    xp: 50
+    hints:
+      - text: "Troque o parâmetro id. A autorização não é verificada."
+        cost_bits: 8
+writeup: "writeups/web-sqli-login.md"

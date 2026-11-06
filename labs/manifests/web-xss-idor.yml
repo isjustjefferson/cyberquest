@@ -1,0 +1,42 @@
+slug: "web-xss-idor"
+title: "XSS e IDOR"
+description: "Pratique XSS refletido, XSS armazenado em comentários e acesso indevido a outro perfil."
+difficulty: 3
+ttl_minutes: 35
+xp_reward: 200
+network:
+  internal: true
+containers:
+  attacker:
+    image: "cyberquest/attacker:latest"
+    hostname: "attacker"
+  targets:
+    - name: "target"
+      image: "cyberquest/target:latest"
+      hostname: "target"
+      env:
+        CQ_LAB: "web-xss-idor"
+      expose_web_port: 8080
+      healthcheck:
+        path: "/health"
+        timeout_s: 30
+objectives:
+  - id: "reflected-xss"
+    title: "Prove o XSS refletido em /search"
+    xp: 70
+    hints:
+      - text: "Envie q=<script>alert(1)</script> via curl ou navegador."
+        cost_bits: 10
+  - id: "stored-xss"
+    title: "Armazene um comentário com script e leia /comments"
+    xp: 70
+    hints:
+      - text: "Faça POST em /comment com comment=<script>alert(1)</script> e depois abra /comments."
+        cost_bits: 10
+  - id: "idor-profile"
+    title: "Acesse o perfil privado em /profile?id=2"
+    xp: 60
+    hints:
+      - text: "O servidor não valida se o perfil pertence à sua sessão."
+        cost_bits: 8
+writeup: "writeups/web-xss-idor.md"

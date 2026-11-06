@@ -1,0 +1,40 @@
+{
+  "name": "cyberquest",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CyberQuest - plataforma gamificada de aprendizado de hacking etico (PT-BR)",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @cyberquest/shared build && concurrently -n api,web -c cyan,green \"pnpm --filter @cyberquest/api dev\" \"pnpm --filter @cyberquest/web dev\"",
+    "build": "pnpm -r build",
+    "start": "pnpm --filter @cyberquest/api start",
+    "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "pnpm --filter @cyberquest/shared build && pnpm -r test",
+    "seed": "pnpm --filter @cyberquest/shared build && pnpm --filter @cyberquest/api seed",
+    "labs-build": "bash scripts/labs-build.sh",
+    "labs-clean": "bash scripts/labs-clean.sh",
+    "audit": "pnpm audit",
+    "db:migrate": "pnpm --filter @cyberquest/api migrate"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "@typescript-eslint/eslint-plugin": "^8.72.1",
+    "@typescript-eslint/parser": "^8.72.1",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "prettier": "^3.3.2",
+    "typescript": "^5.5.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "minimatch": "^11.0.1"
+    }
+  }
+}

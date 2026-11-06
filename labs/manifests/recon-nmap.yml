@@ -1,0 +1,42 @@
+slug: "recon-nmap"
+title: "Reconhecimento com nmap"
+description: "Faça reconhecimento de portas e serviços em um alvo autorizado e colete três flags."
+difficulty: 2
+ttl_minutes: 30
+xp_reward: 200
+network:
+  internal: true
+containers:
+  attacker:
+    image: "cyberquest/attacker:latest"
+    hostname: "attacker"
+  targets:
+    - name: "target"
+      image: "cyberquest/target:latest"
+      hostname: "target"
+      env:
+        CQ_LAB: "recon-nmap"
+      expose_web_port: 8080
+      healthcheck:
+        path: "/health"
+        timeout_s: 30
+objectives:
+  - id: "find-web"
+    title: "Confirme o serviço web e leia /flag-web"
+    xp: 50
+    hints:
+      - text: "nmap -sT target encontra portas abertas; depois use curl."
+        cost_bits: 8
+  - id: "find-header"
+    title: "Descubra o header X-Recon"
+    xp: 60
+    hints:
+      - text: "curl -i http://target:8080/headers"
+        cost_bits: 8
+  - id: "find-banner"
+    title: "Leia o banner da porta 2222"
+    xp: 90
+    hints:
+      - text: "Use nc target 2222 ou curl http://target:2222/."
+        cost_bits: 10
+writeup: "writeups/recon-nmap.md"

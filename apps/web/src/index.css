@@ -1,0 +1,169 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --terminal-accent: #38f2a0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-bg text-text font-sans antialiased;
+  background-image:
+    radial-gradient(circle at 12% 0%, rgba(56, 242, 160, 0.07), transparent 32rem),
+    radial-gradient(circle at 90% 10%, rgba(70, 181, 255, 0.06), transparent 28rem);
+  min-height: 100vh;
+}
+
+::selection {
+  background: rgba(56, 242, 160, 0.3);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #070b10;
+}
+::-webkit-scrollbar-thumb {
+  background: #243040;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #36506a;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-border bg-surface/80 shadow-card backdrop-blur;
+  }
+  .panel {
+    @apply rounded-xl border border-border bg-panel/70;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-accent text-bg hover:bg-accentDim shadow-glow;
+  }
+  .btn-secondary {
+    @apply btn border border-border bg-panel text-text hover:border-accent/50 hover:text-accent;
+  }
+  .btn-ghost {
+    @apply btn text-muted hover:bg-panel hover:text-text;
+  }
+  .btn-danger {
+    @apply btn border border-danger/40 bg-danger/10 text-danger hover:bg-danger/20;
+  }
+  .input {
+    @apply w-full rounded-lg border border-border bg-bg/70 px-3 py-2 text-sm text-text placeholder:text-muted/60 focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/20;
+  }
+  .label {
+    @apply mb-1 block text-xs font-semibold uppercase tracking-wider text-muted;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full border border-border bg-panel px-2.5 py-1 text-xs font-medium;
+  }
+  .kbd {
+    @apply rounded border border-border bg-panel px-1.5 py-0.5 font-mono text-xs text-muted;
+  }
+  .link {
+    @apply text-accent underline underline-offset-4 hover:text-accentDim;
+  }
+}
+
+.prose-cyber {
+  @apply text-[15px] leading-7 text-text/90;
+}
+.prose-cyber h1 {
+  @apply mb-4 mt-8 text-2xl font-bold text-text;
+}
+.prose-cyber h2 {
+  @apply mb-3 mt-8 border-b border-border pb-2 text-xl font-bold text-text;
+}
+.prose-cyber h3 {
+  @apply mb-2 mt-6 text-base font-semibold text-accent;
+}
+.prose-cyber p {
+  @apply my-3;
+}
+.prose-cyber ul {
+  @apply my-3 list-disc space-y-1.5 pl-6;
+}
+.prose-cyber ol {
+  @apply my-3 list-decimal space-y-1.5 pl-6;
+}
+.prose-cyber li::marker {
+  @apply text-accent/70;
+}
+.prose-cyber a {
+  @apply text-cyber underline underline-offset-4;
+}
+.prose-cyber strong {
+  @apply font-semibold text-text;
+}
+.prose-cyber blockquote {
+  @apply my-4 rounded-r-lg border-l-4 border-accent bg-accent/5 px-4 py-3 text-text/80;
+}
+.prose-cyber blockquote p {
+  @apply my-1;
+}
+.prose-cyber code {
+  @apply rounded bg-panel px-1.5 py-0.5 font-mono text-[0.85em] text-accent;
+}
+.prose-cyber pre {
+  @apply my-4 overflow-x-auto rounded-xl border border-border bg-[#0a0f15] p-4;
+}
+.prose-cyber pre code {
+  @apply bg-transparent p-0 text-[13px] leading-6 text-text/90;
+}
+.prose-cyber table {
+  @apply my-4 w-full border-collapse text-sm;
+}
+.prose-cyber th {
+  @apply border border-border bg-panel px-3 py-2 text-left font-semibold;
+}
+.prose-cyber td {
+  @apply border border-border px-3 py-2;
+}
+.prose-cyber hr {
+  @apply my-8 border-border;
+}
+.prose-cyber img {
+  @apply rounded-xl border border-border;
+}
+
+.callout-tip,
+.callout-warning,
+.callout-danger {
+  @apply my-4 rounded-xl border px-4 py-3;
+}
+.callout-tip {
+  @apply border-accent/30 bg-accent/5;
+}
+.callout-warning {
+  @apply border-warn/30 bg-warn/5;
+}
+.callout-danger {
+  @apply border-danger/30 bg-danger/5;
+}
+
+.xterm-viewport {
+  background-color: #0a0f15 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

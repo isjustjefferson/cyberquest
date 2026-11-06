@@ -1,0 +1,48 @@
+slug: "linux-basics"
+title: "Linux Basics"
+description: "Investigue um servidor Linux simulado: encontre arquivos ocultos, leia relatórios, identifique portas e filtre logs."
+difficulty: 2
+ttl_minutes: 35
+xp_reward: 200
+network:
+  internal: true
+containers:
+  attacker:
+    image: "cyberquest/attacker:latest"
+    hostname: "attacker"
+  targets:
+    - name: "target"
+      image: "cyberquest/target:latest"
+      hostname: "target"
+      env:
+        CQ_LAB: "linux-basics"
+      expose_web_port: 8080
+      healthcheck:
+        path: "/health"
+        timeout_s: 30
+objectives:
+  - id: "find-secret"
+    title: "Encontre o arquivo .config_secreta"
+    xp: 40
+    hints:
+      - text: "O arquivo está na raiz do site publicado: /.config_secreta"
+        cost_bits: 8
+  - id: "owner-report"
+    title: "Descubra o dono do relatorio.txt"
+    xp: 40
+    hints:
+      - text: "Leia /relatorio.txt e observe o campo Dono."
+        cost_bits: 5
+  - id: "find-port"
+    title: "Identifique a porta em que o serviço escuta"
+    xp: 50
+    hints:
+      - text: "A porta 8080 aparece em hexadecimal como 1F90 em /proc/net/tcp."
+        cost_bits: 10
+  - id: "count-log"
+    title: "Extraia a flag das linhas do IP 10.0.0.7 no log"
+    xp: 70
+    hints:
+      - text: "Use grep 10.0.0.7 em /logs/access.log e leia a linha anômala."
+        cost_bits: 10
+writeup: "writeups/linux-basics.md"

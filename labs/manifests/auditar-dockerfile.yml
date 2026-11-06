@@ -1,0 +1,42 @@
+slug: "auditar-dockerfile"
+title: "Auditar um Dockerfile e um docker-compose inseguros"
+description: "Revise configurações de container e encontre riscos de privilégio, segredo embutido e execução como root."
+difficulty: 3
+ttl_minutes: 30
+xp_reward: 200
+network:
+  internal: true
+containers:
+  attacker:
+    image: "cyberquest/attacker:latest"
+    hostname: "attacker"
+  targets:
+    - name: "target"
+      image: "cyberquest/target:latest"
+      hostname: "target"
+      env:
+        CQ_LAB: "auditar-dockerfile"
+      expose_web_port: 8080
+      healthcheck:
+        path: "/health"
+        timeout_s: 30
+objectives:
+  - id: "root-user"
+    title: "Identifique por que o container roda como root"
+    xp: 50
+    hints:
+      - text: "Procure a ausência da instrução USER no Dockerfile."
+        cost_bits: 5
+  - id: "hardcoded-secret"
+    title: "Encontre o segredo embutido no compose"
+    xp: 70
+    hints:
+      - text: "Leia a seção environment em /docker-compose.insecure.yml."
+        cost_bits: 8
+  - id: "privileged"
+    title: "Aponte a configuração de privilégio excessivo"
+    xp: 80
+    hints:
+      - text: "Procure privileged: true no compose."
+        cost_bits: 8
+writeup: "writeups/auditar-dockerfile.md"

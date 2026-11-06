@@ -1,0 +1,7 @@
+slug: "05-seguranca-web"
+title: "Segurança Web"
+description: "Como aplicações web falham e como corrigir: OWASP Top 10, injeção, XSS, CSRF, controle de acesso, e ferramentas de teste. Toda prática ocorre em alvos do lab."
+icon: "🕸️"
+color: "vermelho"
+position: 5
+status: available

@@ -1,0 +1,42 @@
+slug: "explorando-a-rede"
+title: "Explorando a rede"
+description: "Resolva nomes internos, inspecione cabeçalhos HTTP e converse com um serviço TCP na porta 2222."
+difficulty: 2
+ttl_minutes: 30
+xp_reward: 200
+network:
+  internal: true
+containers:
+  attacker:
+    image: "cyberquest/attacker:latest"
+    hostname: "attacker"
+  targets:
+    - name: "target"
+      image: "cyberquest/target:latest"
+      hostname: "target"
+      env:
+        CQ_LAB: "explorando-a-rede"
+      expose_web_port: 8080
+      healthcheck:
+        path: "/health"
+        timeout_s: 30
+objectives:
+  - id: "resolve-host"
+    title: "Descubra o IP associado a intranet.lab"
+    xp: 40
+    hints:
+      - text: "Leia /dns.txt no alvo para ver o mapeamento interno."
+        cost_bits: 5
+  - id: "custom-header"
+    title: "Encontre o header customizado da resposta HTTP"
+    xp: 60
+    hints:
+      - text: "Use curl -i http://target:8080/headers e procure X-CyberQuest."
+        cost_bits: 8
+  - id: "tcp-banner"
+    title: "Leia o banner do serviço TCP na porta 2222"
+    xp: 100
+    hints:
+      - text: "Use nc target 2222 ou curl http://target:2222/."
+        cost_bits: 10
+writeup: "writeups/explorando-a-rede.md"

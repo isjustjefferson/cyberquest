@@ -1,0 +1,48 @@
+slug: "padaria-byte"
+title: "Lab final: Padaria Byte"
+description: "Cadeia de reconhecimento, backup exposto, credenciais padrão e IDOR em uma aplicação fictícia."
+difficulty: 4
+ttl_minutes: 45
+xp_reward: 300
+network:
+  internal: true
+containers:
+  attacker:
+    image: "cyberquest/attacker:latest"
+    hostname: "attacker"
+  targets:
+    - name: "target"
+      image: "cyberquest/target:latest"
+      hostname: "target"
+      env:
+        CQ_LAB: "padaria-byte"
+      expose_web_port: 8080
+      healthcheck:
+        path: "/health"
+        timeout_s: 30
+objectives:
+  - id: "recon"
+    title: "Descubra o diretório de backup pelo robots.txt"
+    xp: 40
+    hints:
+      - text: "Leia /robots.txt e siga a pista para /backup/."
+        cost_bits: 5
+  - id: "backup-creds"
+    title: "Obtenha as credenciais no backup"
+    xp: 60
+    hints:
+      - text: "Leia /backup/config.txt."
+        cost_bits: 8
+  - id: "admin-access"
+    title: "Acesse /admin com as credenciais encontradas"
+    xp: 100
+    hints:
+      - text: "Use autenticação básica: curl -u padaria:pao2024 http://target:8080/admin"
+        cost_bits: 12
+  - id: "idor-orders"
+    title: "Acesse o pedido de outro cliente em /api/orders/2"
+    xp: 100
+    hints:
+      - text: "Compare /api/orders/1 com /api/orders/2."
+        cost_bits: 10
+writeup: "writeups/padaria-byte.md"

@@ -1,0 +1,303 @@
+achievements:
+  - slug: "primeiro-passo"
+    title: "Primeiro Passo"
+    description: "Conclua sua primeira lição na plataforma."
+    icon: "👣"
+    rarity: comum
+    criteria:
+      type: "lessons_completed"
+      value: 1
+  - slug: "primeiro-byte-de-etica"
+    title: "Primeiro Byte de Ética"
+    description: "Conclua o boss de Ética."
+    icon: "🛡️"
+    rarity: rara
+    criteria:
+      type: "lesson_completed"
+      lesson: "boss-etica"
+  - slug: "etica-completa"
+    title: "Consciência Tranquila"
+    description: "Conclua a trilha Boas-vindas e Ética."
+    icon: "⚖️"
+    rarity: rara
+    criteria:
+      type: "track_completed"
+      track: "00-boas-vindas"
+  - slug: "dez-licoes"
+    title: "Dez Passos"
+    description: "Conclua 10 lições."
+    icon: "🔟"
+    rarity: comum
+    criteria:
+      type: "lessons_completed"
+      value: 10
+  - slug: "vinte-cinco-licoes"
+    title: "Trilha em Movimento"
+    description: "Conclua 25 lições."
+    icon: "🚀"
+    rarity: rara
+    criteria:
+      type: "lessons_completed"
+      value: 25
+  - slug: "cinquenta-licoes"
+    title: "Meio Caminho"
+    description: "Conclua 50 lições."
+    icon: "🏔️"
+    rarity: epica
+    criteria:
+      type: "lessons_completed"
+      value: 50
+  - slug: "cem-licoes"
+    title: "Centurião do Byte"
+    description: "Conclua 100 lições."
+    icon: "💯"
+    rarity: lendaria
+    criteria:
+      type: "lessons_completed"
+      value: 100
+  - slug: "primeiro-lab"
+    title: "Mãos na Massa"
+    description: "Conclua seu primeiro lab."
+    icon: "🧪"
+    rarity: comum
+    criteria:
+      type: "labs_completed"
+      value: 1
+  - slug: "cinco-labs"
+    title: "Veterano de Laboratório"
+    description: "Conclua 5 labs."
+    icon: "🔬"
+    rarity: rara
+    criteria:
+      type: "labs_completed"
+      value: 5
+  - slug: "todos-labs"
+    title: "Laboratório Completo"
+    description: "Conclua todos os labs disponíveis."
+    icon: "🧫"
+    rarity: lendaria
+    criteria:
+      type: "labs_completed"
+      value: 10
+  - slug: "primeira-flag"
+    title: "Caçador de Flags"
+    description: "Conclua seu primeiro objetivo de lab."
+    icon: "🚩"
+    rarity: comum
+    criteria:
+      type: "objectives_done"
+      value: 1
+  - slug: "dez-objetivos"
+    title: "Colecionador de Flags"
+    description: "Conclua 10 objetivos de lab."
+    icon: "🏴"
+    rarity: rara
+    criteria:
+      type: "objectives_done"
+      value: 10
+  - slug: "vinte-objetivos"
+    title: "Mestre das Flags"
+    description: "Conclua 20 objetivos de lab."
+    icon: "🎯"
+    rarity: epica
+    criteria:
+      type: "objectives_done"
+      value: 20
+  - slug: "streak-3"
+    title: "Três Dias de Foco"
+    description: "Mantenha uma sequência de 3 dias."
+    icon: "🔥"
+    rarity: comum
+    criteria:
+      type: "streak"
+      value: 3
+  - slug: "streak-7"
+    title: "Semana Blindada"
+    description: "Mantenha uma sequência de 7 dias."
+    icon: "📅"
+    rarity: rara
+    criteria:
+      type: "streak"
+      value: 7
+  - slug: "streak-30"
+    title: "Mês de Disciplina"
+    description: "Mantenha uma sequência de 30 dias."
+    icon: "🏅"
+    rarity: lendaria
+    criteria:
+      type: "streak"
+      value: 30
+  - slug: "nivel-5"
+    title: "Analista Júnior"
+    description: "Alcance o nível 5."
+    icon: "📈"
+    rarity: comum
+    criteria:
+      type: "level"
+      value: 5
+  - slug: "nivel-10"
+    title: "Analista Pleno"
+    description: "Alcance o nível 10."
+    icon: "🧠"
+    rarity: rara
+    criteria:
+      type: "level"
+      value: 10
+  - slug: "nivel-20"
+    title: "Especialista"
+    description: "Alcance o nível 20."
+    icon: "🎖️"
+    rarity: epica
+    criteria:
+      type: "level"
+      value: 20
+  - slug: "xp-1000"
+    title: "Mil de XP"
+    description: "Acumule 1.000 XP."
+    icon: "⚡"
+    rarity: comum
+    criteria:
+      type: "xp"
+      value: 1000
+  - slug: "xp-5000"
+    title: "Cinco Mil de XP"
+    description: "Acumule 5.000 XP."
+    icon: "🌟"
+    rarity: rara
+    criteria:
+      type: "xp"
+      value: 5000
+  - slug: "perfeccionista"
+    title: "Perfeccionista"
+    description: "Conclua 10 lições com 3 estrelas."
+    icon: "⭐"
+    rarity: rara
+    criteria:
+      type: "three_star_lessons"
+      value: 10
+  - slug: "tres-estrelas-25"
+    title: "Constelação"
+    description: "Conclua 25 lições com 3 estrelas."
+    icon: "✨"
+    rarity: epica
+    criteria:
+      type: "three_star_lessons"
+      value: 25
+  - slug: "linux-completo"
+    title: "Pinguim de Confiança"
+    description: "Conclua a trilha Fundamentos de TI."
+    icon: "🐧"
+    rarity: epica
+    criteria:
+      type: "track_completed"
+      track: "01-fundamentos-de-ti"
+  - slug: "conceitos-completo"
+    title: "Pensamento Sistêmico"
+    description: "Conclua a trilha Conceitos de Segurança."
+    icon: "🧩"
+    rarity: rara
+    criteria:
+      type: "track_completed"
+      track: "02-conceitos-de-seguranca"
+  - slug: "cripto-completo"
+    title: "Guardião dos Segredos"
+    description: "Conclua a trilha Criptografia e Autenticação."
+    icon: "🔐"
+    rarity: epica
+    criteria:
+      type: "track_completed"
+      track: "03-criptografia-e-autenticacao"
+  - slug: "redes-completo"
+    title: "Cartógrafo de Redes"
+    description: "Conclua a trilha Segurança de Redes."
+    icon: "🌐"
+    rarity: epica
+    criteria:
+      type: "track_completed"
+      track: "04-seguranca-de-redes"
+  - slug: "web-completo"
+    title: "Caçador de Vulnerabilidades"
+    description: "Conclua a trilha Segurança Web."
+    icon: "🕸️"
+    rarity: lendaria
+    criteria:
+      type: "track_completed"
+      track: "05-seguranca-web"
+  - slug: "pentest-completo"
+    title: "Metodologia Afiada"
+    description: "Conclua a trilha Pentest."
+    icon: "🗡️"
+    rarity: lendaria
+    criteria:
+      type: "track_completed"
+      track: "06-pentest"
+  - slug: "blue-team-completo"
+    title: "Olhar de Detetive"
+    description: "Conclua a trilha Blue Team."
+    icon: "🔎"
+    rarity: lendaria
+    criteria:
+      type: "track_completed"
+      track: "07-blue-team"
+  - slug: "cloud-completo"
+    title: "Arquiteto Seguro"
+    description: "Conclua a trilha Cloud e Containers."
+    icon: "☁️"
+    rarity: epica
+    criteria:
+      type: "track_completed"
+      track: "08-cloud-e-containers"
+  - slug: "carreira-completo"
+    title: "Pronto para o Próximo Passo"
+    description: "Conclua a trilha Carreira e Prática Contínua."
+    icon: "🧭"
+    rarity: rara
+    criteria:
+      type: "track_completed"
+      track: "09-carreira-e-pratica-continua"
+  - slug: "sem-dicas"
+    title: "Cabeça Fria"
+    description: "Conclua um objetivo de lab sem comprar dicas."
+    icon: "🧊"
+    rarity: rara
+    criteria:
+      type: "no_hints_lab"
+  - slug: "coruja"
+    title: "Coruja da Madrugada"
+    description: "Estude entre 23h e 5h."
+    icon: "🦉"
+    rarity: comum
+    criteria:
+      type: "time_of_day"
+      value: "night"
+  - slug: "desafio-diario"
+    title: "Desafio Aceito"
+    description: "Conclua um desafio diário."
+    icon: "📌"
+    rarity: comum
+    criteria:
+      type: "daily_challenge"
+  - slug: "colecionador"
+    title: "Colecionador"
+    description: "Desbloqueie 10 conquistas."
+    icon: "🏆"
+    rarity: epica
+    criteria:
+      type: "achievements_count"
+      value: 10
+  - slug: "bits-500"
+    title: "Cofre de Bits"
+    description: "Acumule 500 Bits."
+    icon: "🪙"
+    rarity: rara
+    criteria:
+      type: "bits"
+      value: 500
+  - slug: "padaria-byte"
+    title: "Herói da Padaria"
+    description: "Conclua o lab final Padaria Byte."
+    icon: "🥐"
+    rarity: lendaria
+    criteria:
+      type: "lab_completed"
+      lab: "padaria-byte"

@@ -1,0 +1,48 @@
+slug: "hashes-e-encoding"
+title: "Hashes, encoding e hashes fracos"
+description: "Decodifique Base64, hexadecimal e ROT13 e reconheça um hash MD5 fraco."
+difficulty: 2
+ttl_minutes: 30
+xp_reward: 200
+network:
+  internal: true
+containers:
+  attacker:
+    image: "cyberquest/attacker:latest"
+    hostname: "attacker"
+  targets:
+    - name: "target"
+      image: "cyberquest/target:latest"
+      hostname: "target"
+      env:
+        CQ_LAB: "hashes-e-encoding"
+      expose_web_port: 8080
+      healthcheck:
+        path: "/health"
+        timeout_s: 30
+objectives:
+  - id: "decode-base64"
+    title: "Decodifique a flag em Base64"
+    xp: 50
+    hints:
+      - text: "No terminal: echo 'VALOR' | base64 -d"
+        cost_bits: 8
+  - id: "decode-hex"
+    title: "Decodifique a flag em hexadecimal"
+    xp: 50
+    hints:
+      - text: "Use xxd -r -p ou python3 -c para converter de hex."
+        cost_bits: 8
+  - id: "decode-rot13"
+    title: "Decodifique a flag em ROT13"
+    xp: 50
+    hints:
+      - text: "tr 'A-Za-z' 'N-ZA-Mn-za-m' aplica ROT13."
+        cost_bits: 8
+  - id: "weak-hash"
+    title: "Identifique a fraqueza no hash MD5 apresentado"
+    xp: 50
+    hints:
+      - text: "MD5 é rápido e inadequado para senhas; leia a observação em /hashes.txt."
+        cost_bits: 5
+writeup: "writeups/hashes-e-encoding.md"

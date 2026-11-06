@@ -1,0 +1,42 @@
+slug: "ola-terminal"
+title: "Olá, terminal"
+description: "Primeiro contato com o ambiente: use curl para ler arquivos publicados pelo alvo e capturar três flags simples."
+difficulty: 1
+ttl_minutes: 30
+xp_reward: 150
+network:
+  internal: true
+containers:
+  attacker:
+    image: "cyberquest/attacker:latest"
+    hostname: "attacker"
+  targets:
+    - name: "target"
+      image: "cyberquest/target:latest"
+      hostname: "target"
+      env:
+        CQ_LAB: "ola-terminal"
+      expose_web_port: 8080
+      healthcheck:
+        path: "/health"
+        timeout_s: 30
+objectives:
+  - id: "find-file"
+    title: "Leia o arquivo /flag.txt no alvo"
+    xp: 40
+    hints:
+      - text: "Use: curl http://target:8080/flag.txt"
+        cost_bits: 5
+  - id: "read-hidden"
+    title: "Encontre e leia o arquivo oculto em /home/ctf/.flag"
+    xp: 50
+    hints:
+      - text: "Arquivos que começam com ponto são ocultos no Linux. Tente o caminho completo."
+        cost_bits: 8
+  - id: "identify-user"
+    title: "Descubra o usuário do serviço em /whoami"
+    xp: 60
+    hints:
+      - text: "O endpoint /whoami devolve o usuário e uma flag."
+        cost_bits: 5
+writeup: "writeups/ola-terminal.md"

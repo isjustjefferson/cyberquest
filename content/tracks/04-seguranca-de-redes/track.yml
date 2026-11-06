@@ -1,0 +1,7 @@
+slug: "04-seguranca-de-redes"
+title: "Segurança de Redes"
+description: "Como redes são defendidas e observadas: firewalls, IDS, VPN, análise de tráfego e reconhecimento com nmap."
+icon: "🌐"
+color: "azul"
+position: 4
+status: available

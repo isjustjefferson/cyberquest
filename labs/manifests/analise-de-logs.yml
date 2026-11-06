@@ -1,0 +1,42 @@
+slug: "analise-de-logs"
+title: "Análise de logs de um servidor comprometido"
+description: "Investigue logs de autenticação e acesso para identificar o IP suspeito, a exploração web e a persistência."
+difficulty: 3
+ttl_minutes: 35
+xp_reward: 200
+network:
+  internal: true
+containers:
+  attacker:
+    image: "cyberquest/attacker:latest"
+    hostname: "attacker"
+  targets:
+    - name: "target"
+      image: "cyberquest/target:latest"
+      hostname: "target"
+      env:
+        CQ_LAB: "analise-de-logs"
+      expose_web_port: 8080
+      healthcheck:
+        path: "/health"
+        timeout_s: 30
+objectives:
+  - id: "suspicious-ip"
+    title: "Identifique o IP com tentativas de login e sucesso"
+    xp: 60
+    hints:
+      - text: "Procure Failed password e Accepted password no auth.log pelo mesmo IP."
+        cost_bits: 8
+  - id: "web-exploit"
+    title: "Encontre a tentativa de exploração web no access.log"
+    xp: 70
+    hints:
+      - text: "Procure por SQLi ou por 203.0.113.66 no access.log."
+        cost_bits: 8
+  - id: "persistence"
+    title: "Descubra o usuário criado para persistência"
+    xp: 70
+    hints:
+      - text: "Observe useradd, usermod e a entrada cron de svcbackup."
+        cost_bits: 10
+writeup: "writeups/analise-de-logs.md"
