@@ -81,5 +81,5 @@ export function gradeExercise(exercise: Exercise, answer: unknown): GradeResult 
     default:
       correct = false;
   }
-  return { correct, explanation: exercise.explanation };
+  return { correct, explanation: exercise.explanation ?? '' };
 }

@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Award, Lock } from 'lucide-react';
+import { Award, Compass, Lock } from 'lucide-react';
 import { api, errorMessage } from '../lib/api';
 import { formatDate } from '../lib/format';
 import { Loading, ErrorState } from '../components/Loading';
@@ -19,7 +20,12 @@ const rarityStyle: Record<string, string> = {
 };
 
 export function Achievements() {
-  const query = useQuery({ queryKey: ['achievements'], queryFn: api.achievements });
+  const [area, setArea] = useState('');
+  const areasQuery = useQuery({ queryKey: ['areas'], queryFn: api.areas, staleTime: 60_000 });
+  const query = useQuery({
+    queryKey: ['achievements', area],
+    queryFn: () => api.achievements(area || undefined)
+  });
   if (query.isLoading) return <Loading label="Consultando troféus..." />;
   if (query.isError || !query.data) return <ErrorState message={errorMessage(query.error)} onRetry={() => void query.refetch()} />;
   const achievements = query.data.achievements;
@@ -36,9 +42,27 @@ export function Achievements() {
             <h1 className="mt-1 text-2xl font-bold md:text-3xl">Troféus da jornada</h1>
             <p className="mt-1 text-sm text-muted">Marcos por consistência, domínio e coragem controlada.</p>
           </div>
-          <div className="text-right">
-            <p className="text-3xl font-bold text-accent">{unlocked}</p>
-            <p className="text-xs text-muted">de {achievements.length} desbloqueadas</p>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="relative">
+              <Compass size={13} className="pointer-events-none absolute left-2.5 top-2.5 text-muted" />
+              <select
+                className="input min-w-40 py-1.5 pl-8 text-xs"
+                value={area}
+                onChange={(event) => setArea(event.target.value)}
+                aria-label="Filtrar conquistas por área"
+              >
+                <option value="">Todas as áreas</option>
+                {(areasQuery.data?.areas ?? [])
+                  .filter((item) => item.status === 'active')
+                  .map((item) => (
+                    <option key={item.slug} value={item.slug}>{item.title}</option>
+                  ))}
+              </select>
+            </div>
+            <div className="text-right">
+              <p className="text-3xl font-bold text-accent">{unlocked}</p>
+              <p className="text-xs text-muted">de {achievements.length} desbloqueadas</p>
+            </div>
           </div>
         </div>
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-bg">

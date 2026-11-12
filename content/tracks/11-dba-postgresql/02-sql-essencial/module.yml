@@ -1,0 +1,5 @@
+slug: "02-sql-essencial"
+title: "SQL essencial"
+description: "DDL, DML, consultas, agregações, JOINs, CTEs, window functions, views, transações, constraints e JSONB na Padaria Byte."
+position: 1
+xp_reward: 200

@@ -1,0 +1,5 @@
+slug: "03-modelagem-e-design"
+title: "Modelagem e design"
+description: "Entidades, relacionamentos, normalização, escolha de chaves, primeiros índices e migrações seguras."
+position: 2
+xp_reward: 150

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Crown, Flame, Medal, Trophy } from 'lucide-react';
+import { Compass, Crown, Flame, Medal, Trophy } from 'lucide-react';
 import { api, errorMessage } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { formatNumber } from '../lib/format';
@@ -9,8 +9,13 @@ import { Mascot } from '../components/Mascot';
 
 export function Ranking() {
   const [tab, setTab] = useState<'weekly' | 'all-time'>('weekly');
+  const [area, setArea] = useState('');
   const { user } = useAuth();
-  const query = useQuery({ queryKey: ['leaderboard', tab], queryFn: () => api.leaderboard(tab) });
+  const areasQuery = useQuery({ queryKey: ['areas'], queryFn: api.areas, staleTime: 60_000 });
+  const query = useQuery({
+    queryKey: ['leaderboard', tab, area],
+    queryFn: () => api.leaderboard(tab, area || undefined)
+  });
   const entries = query.data?.leaderboard ?? [];
   const podium = entries.slice(0, 3);
   const rest = entries.slice(3);
@@ -25,21 +30,39 @@ export function Ranking() {
           <h1 className="mt-1 text-2xl font-bold md:text-3xl">Quem está dominando o terminal?</h1>
           <p className="mt-1 text-sm text-muted">XP da semana zera toda segunda. O histórico fica no ranking geral.</p>
         </div>
-        <div className="flex rounded-lg border border-border bg-panel p-1">
-          {[
-            { id: 'weekly' as const, label: 'Semanal', icon: Flame },
-            { id: 'all-time' as const, label: 'Geral', icon: Trophy }
-          ].map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setTab(item.id)}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition ${
-                tab === item.id ? 'bg-accent text-bg' : 'text-muted hover:text-text'
-              }`}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Compass size={13} className="pointer-events-none absolute left-2.5 top-2.5 text-muted" />
+            <select
+              className="input min-w-40 py-1.5 pl-8 text-xs"
+              value={area}
+              onChange={(event) => setArea(event.target.value)}
+              aria-label="Filtrar ranking por área"
             >
-              <item.icon size={13} /> {item.label}
-            </button>
-          ))}
+              <option value="">Todas as áreas</option>
+              {(areasQuery.data?.areas ?? [])
+                .filter((item) => item.status === 'active')
+                .map((item) => (
+                  <option key={item.slug} value={item.slug}>{item.title}</option>
+                ))}
+            </select>
+          </div>
+          <div className="flex rounded-lg border border-border bg-panel p-1">
+            {[
+              { id: 'weekly' as const, label: 'Semanal', icon: Flame },
+              { id: 'all-time' as const, label: 'Geral', icon: Trophy }
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setTab(item.id)}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                  tab === item.id ? 'bg-accent text-bg' : 'text-muted hover:text-text'
+                }`}
+              >
+                <item.icon size={13} /> {item.label}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 

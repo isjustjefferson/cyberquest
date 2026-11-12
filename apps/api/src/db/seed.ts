@@ -1,10 +1,11 @@
 import { closeDb, getDb } from './connection';
-import { loadAchievements, loadContent } from '../content/loader';
+import { loadAchievements, loadAreas, loadContent } from '../content/loader';
 import { loadAllManifests } from '../modules/labs/manifest';
 import { logger } from '../logger';
 import type { DB } from './connection';
 
 export interface SeedReport {
+  areas: number;
   tracks: number;
   modules: number;
   lessons: number;
@@ -14,11 +15,13 @@ export interface SeedReport {
 }
 
 export function syncCatalog(db: DB): SeedReport {
+  const areas = loadAreas();
   const tracks = loadContent();
   const achievements = loadAchievements();
   const labs = loadAllManifests();
 
   const report: SeedReport = {
+    areas: 0,
     tracks: 0,
     modules: 0,
     lessons: 0,
@@ -27,10 +30,59 @@ export function syncCatalog(db: DB): SeedReport {
     labs: 0
   };
 
-  const upsertTrack = db.prepare(`
-    INSERT INTO tracks (slug, title, description, icon, color, position, status)
+  const areaBySlug = new Map(areas.map((area) => [area.frontmatter.slug, area.frontmatter]));
+  if (areaBySlug.size !== areas.length) {
+    throw new Error('Slugs de área duplicados em content/areas');
+  }
+  const areaPositions = new Set<number>();
+  areas.forEach((area, index) => {
+    const position = area.frontmatter.position ?? index;
+    if (areaPositions.has(position)) {
+      throw new Error(`Posição de área duplicada: ${position}`);
+    }
+    areaPositions.add(position);
+  });
+  const trackPositionsByArea = new Map<string, Set<number>>();
+  tracks.forEach((track, trackIndex) => {
+    const areaSlug = track.frontmatter.area ?? 'ciberseguranca';
+    if (!areaBySlug.has(areaSlug)) {
+      throw new Error(`Trilha ${track.frontmatter.slug} referencia área inexistente: ${areaSlug}`);
+    }
+    if (!track.frontmatter.area) {
+      logger.warn({ track: track.frontmatter.slug }, 'track.yml sem area; usando ciberseguranca');
+    }
+    const position = track.frontmatter.position ?? trackIndex;
+    const positions = trackPositionsByArea.get(areaSlug) ?? new Set<number>();
+    if (positions.has(position)) {
+      throw new Error(`Posição de trilha duplicada na área ${areaSlug}: ${position}`);
+    }
+    positions.add(position);
+    trackPositionsByArea.set(areaSlug, positions);
+  });
+  achievements.forEach((achievement) => {
+    if (achievement.area && !areaBySlug.has(achievement.area)) {
+      throw new Error(`Conquista ${achievement.slug} referencia área inexistente: ${achievement.area}`);
+    }
+  });
+
+  const upsertArea = db.prepare(`
+    INSERT INTO areas (slug, title, description, icon, color, position, status)
     VALUES (@slug, @title, @description, @icon, @color, @position, @status)
     ON CONFLICT(slug) DO UPDATE SET
+      title = excluded.title,
+      description = excluded.description,
+      icon = excluded.icon,
+      color = excluded.color,
+      position = excluded.position,
+      status = excluded.status
+    RETURNING id
+  `);
+
+  const upsertTrack = db.prepare(`
+    INSERT INTO tracks (area_id, slug, title, description, icon, color, position, status)
+    VALUES (@area_id, @slug, @title, @description, @icon, @color, @position, @status)
+    ON CONFLICT(slug) DO UPDATE SET
+      area_id = excluded.area_id,
       title = excluded.title,
       description = excluded.description,
       icon = excluded.icon,
@@ -88,13 +140,14 @@ export function syncCatalog(db: DB): SeedReport {
   const deleteExtraExercises = db.prepare('DELETE FROM exercises WHERE lesson_id = ? AND position >= ?');
 
   const upsertAchievement = db.prepare(`
-    INSERT INTO achievements (slug, title, description, icon, rarity, criteria_json)
-    VALUES (@slug, @title, @description, @icon, @rarity, @criteria_json)
+    INSERT INTO achievements (slug, title, description, icon, rarity, area_id, criteria_json)
+    VALUES (@slug, @title, @description, @icon, @rarity, @area_id, @criteria_json)
     ON CONFLICT(slug) DO UPDATE SET
       title = excluded.title,
       description = excluded.description,
       icon = excluded.icon,
       rarity = excluded.rarity,
+      area_id = excluded.area_id,
       criteria_json = excluded.criteria_json
   `);
 
@@ -110,8 +163,29 @@ export function syncCatalog(db: DB): SeedReport {
   `);
 
   const transaction = db.transaction(() => {
+    const areaIds = new Map<string, number>();
+    areas.forEach((area, index) => {
+      const areaRow = upsertArea.get({
+        slug: area.frontmatter.slug,
+        title: area.frontmatter.title,
+        description: area.frontmatter.description,
+        icon: area.frontmatter.icon,
+        color: area.frontmatter.color,
+        position: area.frontmatter.position ?? index,
+        status: area.frontmatter.status
+      }) as { id: number };
+      areaIds.set(area.frontmatter.slug, areaRow.id);
+      report.areas += 1;
+    });
+
     tracks.forEach((track, trackIndex) => {
+      const areaSlug = track.frontmatter.area ?? 'ciberseguranca';
+      const areaId = areaIds.get(areaSlug);
+      if (!areaId) {
+        throw new Error(`Área não sincronizada: ${areaSlug}`);
+      }
       const trackRow = upsertTrack.get({
+        area_id: areaId,
         slug: track.frontmatter.slug,
         title: track.frontmatter.title,
         description: track.frontmatter.description,
@@ -173,6 +247,7 @@ export function syncCatalog(db: DB): SeedReport {
         description: achievement.description,
         icon: achievement.icon ?? '🏅',
         rarity: achievement.rarity ?? 'comum',
+        area_id: achievement.area ? areaIds.get(achievement.area) ?? null : null,
         criteria_json: JSON.stringify(achievement.criteria)
       });
       report.achievements += 1;
@@ -201,8 +276,8 @@ if (require.main === module) {
     const report = syncCatalog(db);
     logger.info(report, 'Seed concluído');
     console.log(
-      `Seed OK: ${report.tracks} trilhas, ${report.modules} módulos, ${report.lessons} lições, ` +
-        `${report.exercises} exercícios, ${report.achievements} conquistas e ${report.labs} labs.`
+      `Seed OK: ${report.areas} áreas, ${report.tracks} trilhas, ${report.modules} módulos, ` +
+        `${report.lessons} lições, ${report.exercises} exercícios, ${report.achievements} conquistas e ${report.labs} labs.`
     );
   } finally {
     closeDb();

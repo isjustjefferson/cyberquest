@@ -1,6 +1,9 @@
 import type {
   AchievementSummary,
   AnswerResult,
+  AreaDetail,
+  AreaStats,
+  AreaSummary,
   DailyChallenge,
   LabDetail,
   LabSessionPublic,
@@ -8,6 +11,8 @@ import type {
   LeaderboardEntry,
   LessonDetail,
   ReviewItem,
+  SqlDatasetSchema,
+  SqlResult,
   TrackDetail,
   TrackSummary,
   UserStats,
@@ -130,8 +135,18 @@ export const api = {
   dashboard() {
     return request<DashboardData>('/api/me/dashboard');
   },
-  tracks() {
-    return request<{ tracks: TrackSummary[] }>('/api/tracks');
+  areas() {
+    return request<{ areas: AreaSummary[] }>('/api/areas');
+  },
+  area(slug: string) {
+    return request<{ area: AreaDetail }>(`/api/areas/${slug}`);
+  },
+  areaStats() {
+    return request<{ areas: AreaStats[] }>('/api/me/stats/areas');
+  },
+  tracks(area?: string) {
+    const query = area ? `?area=${encodeURIComponent(area)}` : '';
+    return request<{ tracks: TrackSummary[] }>(`/api/tracks${query}`);
   },
   track(slug: string) {
     return request<{ track: TrackDetail }>(`/api/tracks/${slug}`);
@@ -151,14 +166,25 @@ export const api = {
       body: JSON.stringify({ answer })
     });
   },
+  runSql(id: number, sql: string) {
+    return request<SqlResult>(`/api/exercises/${id}/sql/run`, {
+      method: 'POST',
+      body: JSON.stringify({ sql })
+    });
+  },
+  datasetSchema(name: string) {
+    return request<{ schema: SqlDatasetSchema }>(`/api/datasets/${encodeURIComponent(name)}/schema`);
+  },
   reviewDue() {
     return request<{ items: ReviewItem[] }>('/api/review/due');
   },
-  achievements() {
-    return request<{ achievements: AchievementSummary[] }>('/api/me/achievements');
+  achievements(area?: string) {
+    const query = area ? `?area=${encodeURIComponent(area)}` : '';
+    return request<{ achievements: AchievementSummary[] }>(`/api/me/achievements${query}`);
   },
-  leaderboard(kind: 'weekly' | 'all-time') {
-    return request<{ leaderboard: LeaderboardEntry[] }>(`/api/leaderboard/${kind}`);
+  leaderboard(kind: 'weekly' | 'all-time', area?: string) {
+    const query = area ? `?area=${encodeURIComponent(area)}` : '';
+    return request<{ leaderboard: LeaderboardEntry[] }>(`/api/leaderboard/${kind}${query}`);
   },
   dailyChallenge() {
     return request<{ challenge: DailyChallenge }>('/api/daily-challenge');
@@ -220,6 +246,22 @@ export const api = {
     }>(`/api/lab-sessions/${id}/flag`, {
       method: 'POST',
       body: JSON.stringify({ objectiveId, flag })
+    });
+  },
+  verifyObjective(id: string, objectiveId: string) {
+    return request<{
+      passed: boolean;
+      message: string;
+      objectiveCompleted?: boolean;
+      alreadyCompleted?: boolean;
+      xpGained?: number;
+      bitsGained?: number;
+      labCompleted?: boolean;
+      stats?: UserStats;
+      unlockedAchievements?: AchievementSummary[];
+    }>(`/api/lab-sessions/${id}/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ objectiveId })
     });
   },
   buyHint(id: string, objectiveId: string) {

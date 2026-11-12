@@ -301,3 +301,137 @@ achievements:
     criteria:
       type: "lab_completed"
       lab: "padaria-byte"
+  - slug: "normalizado"
+    title: "Normalizado"
+    description: "Conclua o módulo Modelagem e design."
+    icon: "📐"
+    rarity: rara
+    area: "bancos-de-dados"
+    criteria:
+      type: "module_completed"
+      module: "03-modelagem-e-design"
+  - slug: "janelista"
+    title: "Janelista"
+    description: "Conclua a lição Window functions."
+    icon: "🪟"
+    rarity: comum
+    area: "bancos-de-dados"
+    criteria:
+      type: "lesson_completed"
+      lesson: "window-functions"
+  - slug: "cacador-de-indices"
+    title: "Caçador de Índices"
+    description: "Conclua o lab Caça à query lenta."
+    icon: "🔎"
+    rarity: rara
+    area: "bancos-de-dados"
+    criteria:
+      type: "lab_completed"
+      lab: "query-lenta"
+  - slug: "faxina-geral"
+    title: "Faxina Geral"
+    description: "Conclua o lab Vacuum e bloat."
+    icon: "🧹"
+    rarity: rara
+    area: "bancos-de-dados"
+    criteria:
+      type: "lab_completed"
+      lab: "vacuum-e-bloat"
+  - slug: "sem-travar"
+    title: "Sem Travar"
+    description: "Conclua o lab Locks e deadlock."
+    icon: "🔓"
+    rarity: rara
+    area: "bancos-de-dados"
+    criteria:
+      type: "lab_completed"
+      lab: "locks-e-deadlock"
+  - slug: "salva-vidas-de-dados"
+    title: "Salva-Vidas de Dados"
+    description: "Conclua o lab Backup e restauração."
+    icon: "🛟"
+    rarity: rara
+    area: "bancos-de-dados"
+    criteria:
+      type: "lab_completed"
+      lab: "backup-e-restore"
+  - slug: "viajante-do-tempo"
+    title: "Viajante do Tempo"
+    description: "Conclua o lab de PITR."
+    icon: "⏳"
+    rarity: epica
+    area: "bancos-de-dados"
+    criteria:
+      type: "lab_completed"
+      lab: "pitr"
+  - slug: "espelho-meu"
+    title: "Espelho Meu"
+    description: "Conclua o lab de replicação em streaming."
+    icon: "🪞"
+    rarity: epica
+    area: "bancos-de-dados"
+    criteria:
+      type: "lab_completed"
+      lab: "replicacao-streaming"
+  - slug: "dba-de-plantao"
+    title: "DBA de Plantão"
+    description: "Conclua o lab final O plantão da Padaria Byte."
+    icon: "🚨"
+    rarity: lendaria
+    area: "bancos-de-dados"
+    criteria:
+      type: "lab_completed"
+      lab: "resgate-padaria-byte"
+  - slug: "dba-completo"
+    title: "DBA Completo"
+    description: "Conclua a trilha Profissional DBA PostgreSQL."
+    icon: "🐘"
+    rarity: lendaria
+    area: "bancos-de-dados"
+    criteria:
+      type: "track_completed"
+      track: "11-dba-postgresql"
+  - slug: "select-from-mundo"
+    title: "SELECT * FROM mundo"
+    description: "Acerte seu primeiro exercício SQL."
+    icon: "🗺️"
+    rarity: comum
+    area: "bancos-de-dados"
+    criteria:
+      type: "sql_query_correct"
+  - slug: "junta-tudo"
+    title: "Junta Tudo"
+    description: "Conclua a lição de JOINs."
+    icon: "🔗"
+    rarity: comum
+    area: "bancos-de-dados"
+    criteria:
+      type: "lesson_completed"
+      lesson: "joins"
+  - slug: "recursivo-ver-recursivo"
+    title: "Recursivo, ver Recursivo"
+    description: "Conclua a lição de CTEs recursivas."
+    icon: "♻️"
+    rarity: rara
+    area: "bancos-de-dados"
+    criteria:
+      type: "lesson_completed"
+      lesson: "ctes-e-recursividade"
+  - slug: "dez-de-dez"
+    title: "Dez de Dez"
+    description: "Acerte 10 exercícios SQL em sequência."
+    icon: "💯"
+    rarity: epica
+    area: "bancos-de-dados"
+    criteria:
+      type: "sql_query_streak"
+      value: 10
+  - slug: "cinquenta-respostas-sql"
+    title: "Cinquentão SQL"
+    description: "Responda 50 exercícios SQL."
+    icon: "⌨️"
+    rarity: epica
+    area: "bancos-de-dados"
+    criteria:
+      type: "sql_query_attempts"
+      value: 50

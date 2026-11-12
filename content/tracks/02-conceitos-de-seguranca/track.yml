@@ -3,5 +3,6 @@ title: "Conceitos de Segurança"
 description: "O vocabulário e o raciocínio de quem protege (e testa) sistemas: princípios, ameaças, frameworks e risco."
 icon: "🔐"
 color: "âmbar"
+area: ciberseguranca
 position: 2
 status: available

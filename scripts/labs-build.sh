@@ -8,6 +8,7 @@ echo "[labs] construindo imagens CyberQuest..."
 docker build -t cyberquest/attacker:latest "$IMAGES/attacker"
 docker build -t cyberquest/target:latest "$IMAGES/target"
 docker build -t cyberquest/proxy:latest "$IMAGES/proxy"
+docker build -t cyberquest/dba-workstation:latest "$IMAGES/dba-workstation"
 
-echo "[labs] imagens prontas: cyberquest/attacker, cyberquest/target e cyberquest/proxy"
+echo "[labs] imagens prontas: cyberquest/attacker, cyberquest/target, cyberquest/proxy e cyberquest/dba-workstation"
 docker images --filter reference='cyberquest/*'

@@ -203,8 +203,10 @@ achievements:
     rarity: "comum"   # comum | rara | epica | lendaria
     criteria:
       type: lessons_completed
-      count: 1
+      value: 1
 ```
+
+Critérios de SQL (`sql_query_correct`, `sql_query_streak`, `sql_query_attempts`) são usados pelas conquistas da trilha DBA e avaliados no evento de resposta.
 
 Critérios suportados estão em `apps/api/src/modules/gamification/service.ts`. O seed é idempotente e atualiza título/descrição/critério pelo `slug`.
 
@@ -213,7 +215,8 @@ Critérios suportados estão em `apps/api/src/modules/gamification/service.ts`. 
 - Trilhas 0–3: conteúdo completo.
 - Trilhas 4–9: primeiras duas lições de cada módulo em `complete`; demais em `draft`. Lições de lab/boss e marcadas com ⭐ permanecem `complete`.
 - Trilha 10: `coming_soon`, com estrutura de módulos e sem lições.
-- Exercícios foram gerados a partir do currículo por script de bootstrap. Há repetição de templates e explicações genéricas; a revisão editorial está no backlog.
+- Trilha 11 (DBA PostgreSQL): módulos 1–6 completos; módulos 7–9 seguem a regra de profundidade (lição ⭐ e lab final completos, demais `draft` com pelo menos 250 palavras e 2 exercícios). O teste `dba-content.test.ts` valida essa regra.
+- Exercícios das trilhas 4–9 e dos módulos `draft` da trilha 11 foram gerados a partir do currículo por script de bootstrap. Há repetição de templates e explicações genéricas; a revisão editorial está no backlog.
 
 ## Fluxo para adicionar ou editar conteúdo
 

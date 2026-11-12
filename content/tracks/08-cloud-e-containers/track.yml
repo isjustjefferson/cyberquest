@@ -3,5 +3,6 @@ title: "Cloud e Containers"
 description: "Segurança em nuvem, containers e pipelines. Como os erros de configuração viram o maior risco quando a infraestrutura vira código."
 icon: "☁️"
 color: "azul-escuro"
+area: ciberseguranca
 position: 8
 status: available

@@ -1,0 +1,76 @@
+slug: "psql-primeiros-passos"
+title: "Primeiros passos com psql"
+description: "Conecte-se a um PostgreSQL real, explore bancos e crie o seu primeiro banco na Padaria Byte."
+difficulty: 1
+ttl_minutes: 30
+xp_reward: 200
+network:
+  internal: true
+containers:
+  workstation:
+    image: "cyberquest/dba-workstation:latest"
+    hostname: "workstation"
+  targets:
+    - name: "db"
+      image: "postgres:16"
+      hostname: "db"
+      env:
+        POSTGRES_PASSWORD: "{{generated_password}}"
+        POSTGRES_DB: "padaria"
+      init_scripts:
+        - "content/datasets/padaria_byte.sql"
+      ephemeral_volumes:
+        - "/var/lib/postgresql/data"
+      resources:
+        memory_mb: 512
+        cpus: 0.5
+      healthcheck:
+        cmd: "pg_isready -h 127.0.0.1 -U postgres"
+        timeout_s: 90
+terminal:
+  container: "workstation"
+  user: "student"
+objectives:
+  - id: "explorar"
+    title: "Confirme que a tabela clientes está acessível"
+    xp: 40
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: "SELECT count(*) > 0 FROM clientes;"
+      expect:
+        equals: "t"
+    hints:
+      - text: "Conecte com psql e rode SELECT count(*) FROM clientes; no banco padaria."
+        cost_bits: 5
+  - id: "criar-padaria-dev"
+    title: "Crie o banco padaria_dev"
+    xp: 60
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: "SELECT count(*) = 1 FROM pg_database WHERE datname = 'padaria_dev';"
+      expect:
+        equals: "t"
+    hints:
+      - text: "No psql: CREATE DATABASE padaria_dev;"
+        cost_bits: 8
+  - id: "versao-major"
+    title: "Descubra a versão major do servidor"
+    xp: 100
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: "SELECT current_setting('server_version_num')::int / 10000 = 16;"
+      expect:
+        equals: "t"
+    hints:
+      - text: "Rode SELECT version(); ou SHOW server_version; e observe o primeiro número."
+        cost_bits: 10
+writeup: "writeups/psql-primeiros-passos.md"

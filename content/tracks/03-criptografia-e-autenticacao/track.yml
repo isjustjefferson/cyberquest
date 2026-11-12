@@ -3,5 +3,6 @@ title: "Criptografia e Autenticação"
 description: "Como proteger segredos e provar identidade: hashes, chaves, certificados, senhas, MFA e sessões."
 icon: "🔑"
 color: "roxo"
+area: ciberseguranca
 position: 3
 status: available

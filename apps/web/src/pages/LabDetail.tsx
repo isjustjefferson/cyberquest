@@ -51,6 +51,7 @@ export function LabDetail() {
   const [flagBusy, setFlagBusy] = useState<string | null>(null);
   const [flagFeedback, setFlagFeedback] = useState<Record<string, { ok: boolean; text: string }>>({});
   const [hintBusy, setHintBusy] = useState<string | null>(null);
+  const [verifyBusy, setVerifyBusy] = useState<string | null>(null);
 
   const query = useQuery({ queryKey: ['lab', slug], queryFn: () => api.lab(slug) });
   const lab = query.data?.lab;
@@ -173,6 +174,36 @@ export function LabDetail() {
       addToast({ tone: 'error', title: 'Flag inválida', description: errorMessage(error) });
     } finally {
       setFlagBusy(null);
+    }
+  }
+
+  async function verify(objective: LabObjectivePublic) {
+    if (!session) return;
+    setVerifyBusy(objective.id);
+    try {
+      const result = await api.verifyObjective(session.id, objective.id);
+      setFlagFeedback((prev) => ({ ...prev, [objective.id]: { ok: result.passed, text: result.message } }));
+      if (result.passed) {
+        addToast({
+          tone: 'success',
+          title: result.alreadyCompleted
+            ? 'Objetivo já concluído'
+            : `Objetivo verificado! +${result.xpGained ?? 0} XP`,
+          description: result.labCompleted ? 'Laboratório completo! O writeup foi liberado.' : undefined
+        });
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['lab', slug] }),
+          queryClient.invalidateQueries({ queryKey: ['me'] }),
+          queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+        ]);
+      } else {
+        addToast({ tone: 'info', title: 'Ainda não', description: result.message });
+      }
+    } catch (error) {
+      setFlagFeedback((prev) => ({ ...prev, [objective.id]: { ok: false, text: errorMessage(error) } }));
+      addToast({ tone: 'error', title: 'Falha na verificação', description: errorMessage(error) });
+    } finally {
+      setVerifyBusy(null);
     }
   }
 
@@ -332,7 +363,7 @@ export function LabDetail() {
               <p className="mt-1 text-xs text-muted">
                 {session?.status === 'expired'
                   ? 'Encerre e inicie uma nova sessão para continuar praticando.'
-                  : 'Inicie o laboratório para abrir o shell do container attacker.'}
+                  : 'Inicie o laboratório para abrir o shell do ambiente do lab.'}
               </p>
             </div>
           )}
@@ -385,25 +416,36 @@ export function LabDetail() {
                             {hintBusy === objective.id ? 'Revelando...' : `Comprar dica (${nextHint.costBits} bits)`}
                           </button>
                         ) : null}
-                        <div className="mt-2 flex gap-2">
-                          <input
-                            className="input font-mono text-xs"
-                            placeholder="CQ{...}"
-                            value={flags[objective.id] ?? ''}
-                            onChange={(event) => setFlags((prev) => ({ ...prev, [objective.id]: event.target.value }))}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter') void submitFlag(objective);
-                            }}
-                            disabled={!session || session.status !== 'running' || flagBusy === objective.id}
-                          />
+                        {objective.mode === 'auto' ? (
                           <button
-                            className="btn-primary shrink-0 px-3 py-2 text-xs"
-                            onClick={() => void submitFlag(objective)}
-                            disabled={!session || session.status !== 'running' || !flags[objective.id]?.trim() || flagBusy === objective.id}
+                            className="btn-secondary mt-2 flex items-center gap-1.5 px-3 py-2 text-xs"
+                            onClick={() => void verify(objective)}
+                            disabled={!session || session.status !== 'running' || verifyBusy === objective.id}
                           >
-                            {flagBusy === objective.id ? '...' : 'Validar'}
+                            <ShieldCheck size={13} />
+                            {verifyBusy === objective.id ? 'Verificando...' : 'Verificar'}
                           </button>
-                        </div>
+                        ) : (
+                          <div className="mt-2 flex gap-2">
+                            <input
+                              className="input font-mono text-xs"
+                              placeholder="CQ{...}"
+                              value={flags[objective.id] ?? ''}
+                              onChange={(event) => setFlags((prev) => ({ ...prev, [objective.id]: event.target.value }))}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') void submitFlag(objective);
+                              }}
+                              disabled={!session || session.status !== 'running' || flagBusy === objective.id}
+                            />
+                            <button
+                              className="btn-primary shrink-0 px-3 py-2 text-xs"
+                              onClick={() => void submitFlag(objective)}
+                              disabled={!session || session.status !== 'running' || !flags[objective.id]?.trim() || flagBusy === objective.id}
+                            >
+                              {flagBusy === objective.id ? '...' : 'Validar'}
+                            </button>
+                          </div>
+                        )}
                       </>
                     ) : null}
                     {feedback ? (

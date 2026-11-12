@@ -4,12 +4,17 @@ import {
   type Exercise,
   type ReviewItem,
   type PublicExercise,
+  type SqlResult,
   publicExercisePayload
 } from '@cyberquest/shared';
 import type { DB } from '../../db/connection';
+import { config } from '../../config';
 import { findLessonBySlug, progressMap } from '../content/service';
 import { evaluateAchievements, grantXp, getUser, getUserStats, touchActivity } from '../gamification/service';
 import { gradeExercise } from './grader';
+import { gradeSqlExercise } from './sql/grader';
+import { readDatasetSql } from './sql/dataset';
+import { runSql } from './sql/runner';
 import { AppError } from '../../utils/errors';
 import { nowIso } from '../../utils/time';
 
@@ -28,6 +33,19 @@ function getExercise(db: DB, exerciseId: number): ExerciseRow {
   return row;
 }
 
+function exerciseContext(db: DB, userId: number, row: ExerciseRow) {
+  const lesson = findLessonBySlug(
+    db,
+    (db.prepare('SELECT slug FROM lessons WHERE id = ?').get(row.lesson_id) as { slug: string }).slug
+  );
+  const info = progressMap(db, userId, lesson.area_slug).get(lesson.id);
+  if (!info || info.status === 'locked') {
+    throw new AppError(403, 'LESSON_LOCKED', 'Esta lição ainda está bloqueada.');
+  }
+  const exercise = JSON.parse(row.payload_json) as Exercise;
+  return { lesson, exercise };
+}
+
 function scheduleReview(db: DB, userId: number, exerciseId: number, quality: number, now = new Date()): void {
   const existing = db
     .prepare('SELECT interval_days, ease FROM review_queue WHERE user_id = ? AND exercise_id = ?')
@@ -44,18 +62,18 @@ function scheduleReview(db: DB, userId: number, exerciseId: number, quality: num
   ).run(userId, exerciseId, nextDate, next.intervalDays, next.ease);
 }
 
-export function answerExercise(db: DB, userId: number, exerciseId: number, answer: unknown): AnswerResult {
+export async function answerExercise(
+  db: DB,
+  userId: number,
+  exerciseId: number,
+  answer: unknown
+): Promise<AnswerResult> {
   const row = getExercise(db, exerciseId);
-  const lesson = findLessonBySlug(
-    db,
-    (db.prepare('SELECT slug FROM lessons WHERE id = ?').get(row.lesson_id) as { slug: string }).slug
-  );
-  const info = progressMap(db, userId).get(lesson.id);
-  if (!info || info.status === 'locked') {
-    throw new AppError(403, 'LESSON_LOCKED', 'Esta lição ainda está bloqueada.');
-  }
-  const exercise = JSON.parse(row.payload_json) as Exercise;
-  const graded = gradeExercise(exercise, answer);
+  const { lesson, exercise } = exerciseContext(db, userId, row);
+  const graded =
+    exercise.type === 'sql_query'
+      ? await gradeSqlExercise(exercise, answer)
+      : gradeExercise(exercise, answer);
   const userBefore = getUser(db, userId);
 
   db.prepare(
@@ -72,7 +90,15 @@ export function answerExercise(db: DB, userId: number, exerciseId: number, answe
 
   let xpGained = 0;
   if (graded.correct) {
-    xpGained += grantXp(db, userId, 'exercise', String(exerciseId), exercise.xp ?? row.xp);
+    xpGained += grantXp(
+      db,
+      userId,
+      'exercise',
+      String(exerciseId),
+      exercise.xp ?? row.xp,
+      new Date(),
+      lesson.area_id
+    );
     scheduleReview(db, userId, exerciseId, 5);
   } else {
     scheduleReview(db, userId, exerciseId, 1);
@@ -85,7 +111,8 @@ export function answerExercise(db: DB, userId: number, exerciseId: number, answe
     lessonSlug: lesson.slug,
     moduleSlug: lesson.module_slug,
     trackSlug: lesson.track_slug,
-    exerciseType: exercise.type
+    exerciseType: exercise.type,
+    correct: graded.correct
   });
   const userAfter = getUser(db, userId);
   const stats = getUserStats(db, userId);
@@ -107,6 +134,31 @@ export function answerExercise(db: DB, userId: number, exerciseId: number, answe
     unlockedAchievements,
     reviewScheduled: true
   };
+}
+
+export async function runSqlExercise(
+  db: DB,
+  userId: number,
+  exerciseId: number,
+  sql: string
+): Promise<SqlResult> {
+  if (sql.trim().length === 0) {
+    throw new AppError(400, 'INVALID_SQL_ANSWER', 'Escreva uma consulta SQL para executar.');
+  }
+  if (Buffer.byteLength(sql, 'utf8') > config.SQL_MAX_SQL_BYTES) {
+    throw new AppError(413, 'SQL_TOO_LARGE', 'A consulta SQL enviada é muito grande.');
+  }
+  const row = getExercise(db, exerciseId);
+  const { exercise } = exerciseContext(db, userId, row);
+  if (exercise.type !== 'sql_query') {
+    throw new AppError(400, 'NOT_A_SQL_EXERCISE', 'Este exercício não aceita SQL.');
+  }
+  return runSql({
+    mode: 'run',
+    datasetSql: readDatasetSql(exercise.dataset),
+    setup: exercise.setup,
+    sql
+  });
 }
 
 export function dueReviews(db: DB, userId: number, now = new Date()): ReviewItem[] {

@@ -1,0 +1,77 @@
+slug: "pg-hba-no-acesso"
+title: "O acesso que não entra (pg_hba)"
+description: "Diagnostique uma recusa de conexão e corrija o pg_hba.conf com autenticação segura, sem cair em trust."
+difficulty: 3
+ttl_minutes: 40
+xp_reward: 250
+network:
+  internal: true
+containers:
+  workstation:
+    image: "cyberquest/dba-workstation:latest"
+    hostname: "workstation"
+  targets:
+    - name: "db"
+      image: "postgres:16"
+      hostname: "db"
+      env:
+        POSTGRES_PASSWORD: "{{generated_password}}"
+        POSTGRES_DB: "padaria"
+      init_scripts:
+        - "content/datasets/padaria_byte.sql"
+        - "labs/sql/zz_pg_hba_setup.sh"
+      ephemeral_volumes:
+        - "/var/lib/postgresql/data"
+      healthcheck:
+        cmd: "pg_isready -h 127.0.0.1 -U postgres"
+        timeout_s: 90
+terminal:
+  container: "db"
+  user: "postgres"
+objectives:
+  - id: "localizar-regra"
+    title: "Localize a regra de app_rw no pg_hba.conf"
+    xp: 50
+    verify:
+      type: "cmd"
+      container: "db"
+      user: "postgres"
+      query: >-
+        grep -Eq '^host[[:space:]]+padaria[[:space:]]+app_rw[[:space:]]+'
+        "${PGDATA:-/var/lib/postgresql/data}/pg_hba.conf"
+      expect:
+        exit_code: 0
+    hints:
+      - text: "O arquivo fica em $PGDATA/pg_hba.conf. Use grep app_rw para encontrá-lo."
+        cost_bits: 8
+  - id: "corrigir-scram"
+    title: "Permita app_rw com scram-sha-256"
+    xp: 100
+    verify:
+      type: "cmd"
+      container: "db"
+      user: "postgres"
+      query: >-
+        grep -Eq '^host[[:space:]]+padaria[[:space:]]+app_rw[[:space:]]+172\.16\.0\.0/12[[:space:]]+scram-sha-256[[:space:]]*$'
+        "${PGDATA:-/var/lib/postgresql/data}/pg_hba.conf"
+      expect:
+        exit_code: 0
+    hints:
+      - text: "Troque md5 por scram-sha-256 na linha de app_rw e recarregue com pg_ctl reload -D $PGDATA."
+        cost_bits: 12
+  - id: "sem-trust"
+    title: "Prove que nenhuma regra trust aberta ficou"
+    xp: 100
+    verify:
+      type: "cmd"
+      container: "db"
+      user: "postgres"
+      query: >-
+        ! grep -Eq '^[[:space:]]*host[[:space:]]+all[[:space:]]+all[[:space:]]+0\.0\.0\.0/0[[:space:]]+trust'
+        "${PGDATA:-/var/lib/postgresql/data}/pg_hba.conf"
+      expect:
+        exit_code: 0
+    hints:
+      - text: "Nunca use trust para 0.0.0.0/0. Prefira scram-sha-256 e restrinja a rede do lab."
+        cost_bits: 10
+writeup: "writeups/pg-hba-no-acesso.md"

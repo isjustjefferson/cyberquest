@@ -64,14 +64,15 @@ export function grantXp(
   sourceType: string,
   sourceId: string,
   amount: number,
-  now = new Date()
+  now = new Date(),
+  areaId: number | null = null
 ): number {
   if (amount <= 0) return 0;
   const result = db
     .prepare(
-      'INSERT OR IGNORE INTO xp_events (user_id, source_type, source_id, amount, created_at) VALUES (?, ?, ?, ?, ?)'
+      'INSERT OR IGNORE INTO xp_events (user_id, source_type, source_id, amount, created_at, area_id) VALUES (?, ?, ?, ?, ?, ?)'
     )
-    .run(userId, sourceType, sourceId, Math.floor(amount), now.toISOString());
+    .run(userId, sourceType, sourceId, Math.floor(amount), now.toISOString(), areaId);
   if (result.changes === 0) return 0;
   const user = getUser(db, userId);
   const newXp = user.xp_total + Math.floor(amount);
@@ -192,6 +193,7 @@ export interface AchievementRow {
   description: string;
   icon: string;
   rarity: AchievementSummary['rarity'];
+  area_id: number | null;
   criteria_json: string;
 }
 
@@ -203,6 +205,7 @@ interface EventContext {
   labSlug?: string;
   hintsUsed?: number;
   exerciseType?: string;
+  correct?: boolean;
 }
 
 interface Metrics {
@@ -215,6 +218,8 @@ interface Metrics {
   xp: number;
   achievementsOwned: number;
   objectivesDone: number;
+  sqlQueryAttempts: number;
+  sqlQueryCorrectStreak: number;
   completedTracks: Set<string>;
   completedModules: Set<string>;
   completedLessons: Set<string>;
@@ -243,6 +248,28 @@ function collectMetrics(db: DB, userId: number, user: UserRow, now: Date): Metri
       total: number;
     }
   ).total;
+  const sqlQueryAttempts = (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS total FROM exercise_attempts ea
+         JOIN exercises e ON e.id = ea.exercise_id
+         WHERE ea.user_id = ? AND e.type = 'sql_query'`
+      )
+      .get(userId) as { total: number }
+  ).total;
+  const recentSqlAttempts = db
+    .prepare(
+      `SELECT ea.correct FROM exercise_attempts ea
+       JOIN exercises e ON e.id = ea.exercise_id
+       WHERE ea.user_id = ? AND e.type = 'sql_query'
+       ORDER BY ea.id DESC LIMIT 100`
+    )
+    .all(userId) as Array<{ correct: number }>;
+  let sqlQueryCorrectStreak = 0;
+  for (const attempt of recentSqlAttempts) {
+    if (attempt.correct !== 1) break;
+    sqlQueryCorrectStreak += 1;
+  }
 
   const completedLessonsRows = db
     .prepare(
@@ -302,6 +329,8 @@ function collectMetrics(db: DB, userId: number, user: UserRow, now: Date): Metri
     xp: user.xp_total,
     achievementsOwned,
     objectivesDone,
+    sqlQueryAttempts,
+    sqlQueryCorrectStreak,
     completedTracks,
     completedModules,
     completedLessons,
@@ -324,6 +353,16 @@ function criteriaMatches(criteria: Record<string, unknown>, metrics: Metrics, ev
       return metrics.labsCompleted >= value;
     case 'objectives_done':
       return metrics.objectivesDone >= value;
+    case 'sql_query_correct':
+      return event.exerciseType === 'sql_query' && event.correct === true;
+    case 'sql_query_streak':
+      return (
+        metrics.sqlQueryCorrectStreak >= value &&
+        event.exerciseType === 'sql_query' &&
+        event.correct === true
+      );
+    case 'sql_query_attempts':
+      return metrics.sqlQueryAttempts >= value && event.exerciseType === 'sql_query';
     case 'streak':
       return metrics.streak >= value;
     case 'level':
@@ -365,7 +404,13 @@ export function evaluateAchievements(
 ): AchievementSummary[] {
   const user = getUser(db, userId);
   const metrics = collectMetrics(db, userId, user, now);
-  const all = db.prepare('SELECT * FROM achievements').all() as AchievementRow[];
+  const all = db
+    .prepare(
+      `SELECT a.*, ar.slug AS area_slug
+       FROM achievements a
+       LEFT JOIN areas ar ON ar.id = a.area_id`
+    )
+    .all() as Array<AchievementRow & { area_slug: string | null }>;
   const owned = new Set(
     (
       db.prepare('SELECT achievement_id FROM user_achievements WHERE user_id = ?').all(userId) as Array<{
@@ -390,13 +435,22 @@ export function evaluateAchievements(
     if (result.changes === 0) continue;
     metrics.achievementsOwned += 1;
     grantBits(db, userId, `achievement_${achievement.slug}`, RARITY_BITS[achievement.rarity] ?? 10, now);
-    grantXp(db, userId, 'achievement', achievement.slug, RARITY_XP[achievement.rarity] ?? 20, now);
+    grantXp(
+      db,
+      userId,
+      'achievement',
+      achievement.slug,
+      RARITY_XP[achievement.rarity] ?? 20,
+      now,
+      achievement.area_id
+    );
     unlocked.push({
       slug: achievement.slug,
       title: achievement.title,
       description: achievement.description,
       icon: achievement.icon,
       rarity: achievement.rarity,
+      areaSlug: achievement.area_slug,
       unlockedAt: now.toISOString()
     });
   }
@@ -406,35 +460,65 @@ export function evaluateAchievements(
   return unlocked;
 }
 
-export function listAchievements(db: DB, userId: number): AchievementSummary[] {
+function areaIdForSlug(db: DB, areaSlug: string): number {
+  const row = db.prepare('SELECT id FROM areas WHERE slug = ?').get(areaSlug) as { id: number } | undefined;
+  if (!row) throw new AppError(404, 'AREA_NOT_FOUND', 'Área não encontrada.');
+  return row.id;
+}
+
+export function listAchievements(db: DB, userId: number, areaSlug?: string): AchievementSummary[] {
+  const areaFilter = areaSlug
+    ? 'WHERE a.area_id IS NULL OR a.area_id = (SELECT id FROM areas WHERE slug = ?)'
+    : '';
+  const params = areaSlug ? [userId, areaSlug] : [userId];
+  if (areaSlug) areaIdForSlug(db, areaSlug);
   const rows = db
     .prepare(
-      `SELECT a.*, ua.unlocked_at
+      `SELECT a.*, ar.slug AS area_slug, ua.unlocked_at
        FROM achievements a
+       LEFT JOIN areas ar ON ar.id = a.area_id
        LEFT JOIN user_achievements ua ON ua.achievement_id = a.id AND ua.user_id = ?
+       ${areaFilter}
        ORDER BY CASE a.rarity WHEN 'lendaria' THEN 0 WHEN 'epica' THEN 1 WHEN 'rara' THEN 2 ELSE 3 END, a.id`
     )
-    .all(userId) as Array<AchievementRow & { unlocked_at: string | null }>;
+    .all(...params) as Array<AchievementRow & { area_slug: string | null; unlocked_at: string | null }>;
   return rows.map((row) => ({
     slug: row.slug,
     title: row.title,
     description: row.description,
     icon: row.icon,
     rarity: row.rarity,
+    areaSlug: row.area_slug,
     unlockedAt: row.unlocked_at
   }));
 }
 
-export function weeklyLeaderboard(db: DB, now = new Date()): LeaderboardEntry[] {
-  const rows = db
+function areaLeaderboard(
+  db: DB,
+  areaId: number,
+  weekly: boolean,
+  now: Date
+): Array<{
+  id: number;
+  username: string;
+  display_name: string;
+  avatar_id: string;
+  level: number;
+  xp: number;
+}> {
+  const weekFilter = weekly ? 'AND substr(x.created_at, 1, 10) >= ?' : '';
+  const params = weekly ? [areaId, currentWeekStart(now)] : [areaId];
+  return db
     .prepare(
-      `SELECT u.id, u.username, u.display_name, u.avatar_id, u.level, w.xp
-       FROM weekly_xp w JOIN users u ON u.id = w.user_id
-       WHERE w.week_start = ?
-       ORDER BY w.xp DESC, u.xp_total DESC, u.id ASC
+      `SELECT u.id, u.username, u.display_name, u.avatar_id, u.level, COALESCE(SUM(x.amount), 0) AS xp
+       FROM users u
+       LEFT JOIN xp_events x ON x.user_id = u.id AND x.area_id = ? ${weekFilter}
+       GROUP BY u.id
+       HAVING xp > 0
+       ORDER BY xp DESC, u.xp_total DESC, u.id ASC
        LIMIT 50`
     )
-    .all(currentWeekStart(now)) as Array<{
+    .all(...params) as Array<{
     id: number;
     username: string;
     display_name: string;
@@ -442,6 +526,27 @@ export function weeklyLeaderboard(db: DB, now = new Date()): LeaderboardEntry[] 
     level: number;
     xp: number;
   }>;
+}
+
+export function weeklyLeaderboard(db: DB, now = new Date(), areaSlug?: string): LeaderboardEntry[] {
+  const rows = areaSlug
+    ? areaLeaderboard(db, areaIdForSlug(db, areaSlug), true, now)
+    : (db
+        .prepare(
+          `SELECT u.id, u.username, u.display_name, u.avatar_id, u.level, w.xp
+           FROM weekly_xp w JOIN users u ON u.id = w.user_id
+           WHERE w.week_start = ?
+           ORDER BY w.xp DESC, u.xp_total DESC, u.id ASC
+           LIMIT 50`
+        )
+        .all(currentWeekStart(now)) as Array<{
+        id: number;
+        username: string;
+        display_name: string;
+        avatar_id: string;
+        level: number;
+        xp: number;
+      }>);
   return rows.map((row, index) => ({
     position: index + 1,
     userId: row.id,
@@ -453,20 +558,22 @@ export function weeklyLeaderboard(db: DB, now = new Date()): LeaderboardEntry[] 
   }));
 }
 
-export function allTimeLeaderboard(db: DB): LeaderboardEntry[] {
-  const rows = db
-    .prepare(
-      `SELECT id, username, display_name, avatar_id, level, xp_total AS xp
-       FROM users ORDER BY xp_total DESC, id ASC LIMIT 50`
-    )
-    .all() as Array<{
-    id: number;
-    username: string;
-    display_name: string;
-    avatar_id: string;
-    level: number;
-    xp: number;
-  }>;
+export function allTimeLeaderboard(db: DB, areaSlug?: string): LeaderboardEntry[] {
+  const rows = areaSlug
+    ? areaLeaderboard(db, areaIdForSlug(db, areaSlug), false, new Date())
+    : (db
+        .prepare(
+          `SELECT id, username, display_name, avatar_id, level, xp_total AS xp
+           FROM users ORDER BY xp_total DESC, id ASC LIMIT 50`
+        )
+        .all() as Array<{
+        id: number;
+        username: string;
+        display_name: string;
+        avatar_id: string;
+        level: number;
+        xp: number;
+      }>);
   return rows.map((row, index) => ({
     position: index + 1,
     userId: row.id,

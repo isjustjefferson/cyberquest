@@ -3,5 +3,6 @@ title: "Boas-vindas e Ética"
 description: "Antes de qualquer comando, você aprende as regras do jogo: o que separa um hacker ético de um criminoso, o que a lei brasileira diz e como montar seu laboratório com segurança."
 icon: "🛡️"
 color: "verde"
+area: ciberseguranca
 position: 0
 status: available

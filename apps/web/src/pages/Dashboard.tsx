@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Award,
   BookOpen,
+  Compass,
   Crown,
   Flame,
   RotateCcw,
@@ -29,6 +30,7 @@ const rarityStyle: Record<string, string> = {
 export function Dashboard() {
   const { user } = useAuth();
   const query = useQuery({ queryKey: ['dashboard'], queryFn: api.dashboard });
+  const areasQuery = useQuery({ queryKey: ['area-stats'], queryFn: api.areaStats });
   if (query.isLoading) return <Loading label="Montando seu painel..." />;
   if (query.isError || !query.data) {
     return <ErrorState message={errorMessage(query.error)} onRetry={() => void query.refetch()} />;
@@ -53,7 +55,7 @@ export function Dashboard() {
             <p className="mt-1 text-sm text-muted">
               {next
                 ? `Próxima parada: ${next.title} · ${next.moduleTitle}`
-                : 'Escolha uma trilha para iniciar sua jornada.'}
+                : 'Escolha uma área para iniciar sua jornada.'}
             </p>
             <div className="mt-4 max-w-md">
               <XpBar
@@ -72,8 +74,8 @@ export function Dashboard() {
                 {next.status === 'in_progress' ? 'Continuar lição' : 'Começar agora'} <ArrowRight size={16} />
               </Link>
             ) : (
-              <Link to="/trilhas" className="btn-primary px-5 py-3">
-                Explorar trilhas <ArrowRight size={16} />
+              <Link to="/areas" className="btn-primary px-5 py-3">
+                Explorar áreas <ArrowRight size={16} />
               </Link>
             )}
           </div>
@@ -99,6 +101,48 @@ export function Dashboard() {
           </div>
         ))}
       </section>
+
+      {(areasQuery.data?.areas.length ?? 0) > 0 ? (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 font-semibold">
+              <Compass size={17} className="text-accent" /> Suas áreas
+            </h2>
+            <Link to="/areas" className="text-xs text-muted hover:text-accent">Ver todas</Link>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {areasQuery.data!.areas.map((area) => (
+              <Link
+                key={area.slug}
+                to={`/areas/${area.slug}`}
+                className="card group flex items-center gap-4 p-4 transition hover:-translate-y-0.5 hover:border-accent/40"
+              >
+                <div
+                  className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-bg text-2xl ring-1 ring-border"
+                  style={{ color: area.color }}
+                >
+                  {area.icon}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate font-semibold group-hover:text-accent">{area.title}</p>
+                    <span className="text-[10px] text-muted">{area.percent}%</span>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-bg">
+                    <div
+                      className="h-full rounded-full bg-accent"
+                      style={{ width: `${area.percent}%` }}
+                    />
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-muted">
+                    {area.completedLessons}/{area.totalLessons} lições · {formatNumber(area.xp)} XP
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <div className="grid gap-5 lg:grid-cols-3">
         <section className="card p-5 lg:col-span-2">

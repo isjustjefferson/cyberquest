@@ -1,0 +1,5 @@
+slug: "06-backup-replicacao-e-ha"
+title: "Backup, replicação e alta disponibilidade"
+description: "RPO e RTO, pg_dump, basebackup, WAL, PITR, replicação streaming e lógica, failover e resiliência na Padaria Byte."
+position: 5
+xp_reward: 250

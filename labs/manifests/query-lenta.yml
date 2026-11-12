@@ -1,0 +1,103 @@
+slug: "query-lenta"
+title: "Caça à query lenta"
+description: "O relatório de vendas da Padaria Byte ficou lento após 500 mil pedidos. Encontre o gargalo, crie o índice certo e comprove a melhora."
+difficulty: 3
+ttl_minutes: 45
+xp_reward: 300
+network:
+  internal: true
+containers:
+  workstation:
+    image: "cyberquest/dba-workstation:latest"
+    hostname: "workstation"
+  targets:
+    - name: "db"
+      image: "postgres:16"
+      hostname: "db"
+      command:
+        - "postgres"
+        - "-c"
+        - "shared_preload_libraries=pg_stat_statements"
+        - "-c"
+        - "max_connections=50"
+      env:
+        POSTGRES_PASSWORD: "{{generated_password}}"
+        POSTGRES_DB: "padaria"
+      init_scripts:
+        - "content/datasets/padaria_byte.sql"
+        - "labs/sql/zz_query_lenta_setup.sql"
+      ephemeral_volumes:
+        - "/var/lib/postgresql/data"
+      resources:
+        memory_mb: 768
+        cpus: 1
+      healthcheck:
+        cmd: "pg_isready -h 127.0.0.1 -U postgres"
+        timeout_s: 120
+terminal:
+  container: "workstation"
+  user: "student"
+objectives:
+  - id: "instrumentacao"
+    title: "Confirme que pg_stat_statements está instrumentando o servidor"
+    xp: 60
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: "SELECT current_setting('shared_preload_libraries') LIKE '%pg_stat_statements%';"
+      expect:
+        equals: "t"
+    hints:
+      - text: "Confira SHOW shared_preload_libraries; e consulte SELECT * FROM pg_stat_statements;"
+        cost_bits: 8
+  - id: "indice-valido"
+    title: "Crie um índice válido em pedidos(cliente_id)"
+    xp: 100
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: >-
+        SELECT count(*) > 0 FROM pg_index i
+        JOIN pg_class t ON t.oid = i.indrelid
+        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(i.indkey)
+        WHERE t.relname = 'pedidos' AND a.attname = 'cliente_id' AND i.indisvalid;
+      expect:
+        equals: "t"
+    hints:
+      - text: "Use CREATE INDEX CONCURRENTLY idx_pedidos_cliente ON pedidos(cliente_id);"
+        cost_bits: 12
+  - id: "plano-mudou"
+    title: "Comprove que o plano usa índice"
+    xp: 100
+    verify:
+      type: "cmd"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: >-
+        psql -X -At -c "EXPLAIN SELECT count(*) FROM pedidos WHERE cliente_id = 3"
+        | grep -Eq 'Index Scan|Bitmap Index Scan'
+      expect:
+        exit_code: 0
+    hints:
+      - text: "Rode EXPLAIN (ANALYZE, BUFFERS) SELECT count(*) FROM pedidos WHERE cliente_id = 3; e procure Index Scan."
+        cost_bits: 12
+  - id: "indice-duplicado"
+    title: "Bônus: remova o índice duplicado idx_pedidos_cliente_dup"
+    xp: 40
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: "SELECT count(*) = 0 FROM pg_indexes WHERE indexname = 'idx_pedidos_cliente_dup';"
+      expect:
+        equals: "t"
+    hints:
+      - text: "DROP INDEX CONCURRENTLY idx_pedidos_cliente_dup;"
+        cost_bits: 6
+writeup: "writeups/query-lenta.md"

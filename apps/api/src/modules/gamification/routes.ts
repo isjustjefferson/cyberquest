@@ -25,6 +25,7 @@ import {
   weeklyLeaderboard
 } from './service';
 import { gradeExercise } from '../exercises/grader';
+import { gradeSqlExercise } from '../exercises/sql/grader';
 import { sm2 } from '@cyberquest/shared';
 import { nowIso } from '../../utils/time';
 
@@ -81,12 +82,16 @@ gamificationRouter.get(
   })
 );
 
+function areaFilter(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
 gamificationRouter.get(
   '/me/achievements',
   requireAuth,
   asyncHandler(async (req, res) => {
     const db = getDb();
-    res.json({ achievements: listAchievements(db, req.user!.id) });
+    res.json({ achievements: listAchievements(db, req.user!.id, areaFilter(req.query.area)) });
   })
 );
 
@@ -95,23 +100,23 @@ gamificationRouter.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const db = getDb();
-    res.json({ achievements: listAchievements(db, req.user!.id) });
+    res.json({ achievements: listAchievements(db, req.user!.id, areaFilter(req.query.area)) });
   })
 );
 
 gamificationRouter.get(
   '/leaderboard/weekly',
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
     const db = getDb();
-    res.json({ leaderboard: weeklyLeaderboard(db) });
+    res.json({ leaderboard: weeklyLeaderboard(db, new Date(), areaFilter(req.query.area)) });
   })
 );
 
 gamificationRouter.get(
   '/leaderboard/all-time',
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
     const db = getDb();
-    res.json({ leaderboard: allTimeLeaderboard(db) });
+    res.json({ leaderboard: allTimeLeaderboard(db, areaFilter(req.query.area)) });
   })
 );
 
@@ -124,12 +129,19 @@ function ensureDailyChallenge(db: ReturnType<typeof getDb>, userId: number): Dai
     let picked = db
       .prepare(
         `SELECT e.id FROM exercises e
-         WHERE e.lesson_id IN (SELECT lesson_id FROM user_lessons WHERE user_id = ? AND status = 'completed')
+         WHERE (e.type <> 'sql_query' OR json_extract(e.payload_json, '$.grade.mode') IN ('result_match', 'plan_check'))
+           AND e.lesson_id IN (SELECT lesson_id FROM user_lessons WHERE user_id = ? AND status = 'completed')
          ORDER BY RANDOM() LIMIT 1`
       )
       .get(userId) as { id: number } | undefined;
     if (!picked) {
-      picked = db.prepare('SELECT id FROM exercises ORDER BY RANDOM() LIMIT 1').get() as
+      picked = db
+        .prepare(
+          `SELECT id FROM exercises
+           WHERE type <> 'sql_query'
+           ORDER BY RANDOM() LIMIT 1`
+        )
+        .get() as
         | { id: number }
         | undefined;
     }
@@ -200,7 +212,10 @@ gamificationRouter.post(
       payload_json: string;
     };
     const exercise = JSON.parse(row.payload_json) as Exercise;
-    const graded = gradeExercise(exercise, input.answer);
+    const graded =
+      exercise.type === 'sql_query'
+        ? await gradeSqlExercise(exercise, input.answer)
+        : gradeExercise(exercise, input.answer);
     db.prepare(
       'INSERT INTO exercise_attempts (user_id, exercise_id, correct, answer_json, created_at) VALUES (?, ?, ?, ?, ?)'
     ).run(userId, input.exerciseId, graded.correct ? 1 : 0, JSON.stringify(input.answer), nowIso());
@@ -212,7 +227,11 @@ gamificationRouter.post(
     }
     const activity = touchActivity(db, userId);
     xpGained += activity.xpGained;
-    const unlockedAchievements = evaluateAchievements(db, userId, { type: 'daily_challenge' });
+    const unlockedAchievements = evaluateAchievements(db, userId, {
+      type: 'daily_challenge',
+      exerciseType: exercise.type,
+      correct: graded.correct
+    });
     const after = getUser(db, userId);
     const stats = getUserStats(db, userId);
     const result: AnswerResult = {

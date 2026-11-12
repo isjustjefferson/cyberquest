@@ -6,7 +6,8 @@ import { Landing } from './pages/Landing';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Dashboard } from './pages/Dashboard';
-import { Tracks } from './pages/Tracks';
+import { Areas, TracksRedirect } from './pages/Areas';
+import { AreaDetail } from './pages/AreaDetail';
 import { TrackDetail } from './pages/TrackDetail';
 import { Lesson } from './pages/Lesson';
 import { Labs } from './pages/Labs';
@@ -44,7 +45,9 @@ export function App() {
           }
         >
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/trilhas" element={<Tracks />} />
+          <Route path="/areas" element={<Areas />} />
+          <Route path="/areas/:slug" element={<AreaDetail />} />
+          <Route path="/trilhas" element={<TracksRedirect />} />
           <Route path="/trilhas/:slug" element={<TrackDetail />} />
           <Route path="/licoes/:slug" element={<Lesson />} />
           <Route path="/labs" element={<Labs />} />

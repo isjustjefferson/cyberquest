@@ -3,9 +3,12 @@ import path from 'node:path';
 import matter from 'gray-matter';
 import yaml from 'js-yaml';
 import {
+  achievementFrontmatterSchema,
+  areaFrontmatterSchema,
   lessonFrontmatterSchema,
   moduleFrontmatterSchema,
   trackFrontmatterSchema,
+  type AreaFrontmatter,
   type LessonFrontmatter,
   type ModuleFrontmatter,
   type TrackFrontmatter
@@ -33,12 +36,18 @@ export interface LoadedTrack {
   modules: LoadedModule[];
 }
 
+export interface LoadedArea {
+  file: string;
+  frontmatter: AreaFrontmatter;
+}
+
 export interface LoadedAchievement {
   slug: string;
   title: string;
   description: string;
   icon: string;
   rarity: string;
+  area: string | null;
   criteria: Record<string, unknown>;
 }
 
@@ -53,6 +62,20 @@ function dirsSorted(root: string): string[] {
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort();
+}
+
+export function loadAreas(contentDir = config.contentDir): LoadedArea[] {
+  const areasRoot = path.join(contentDir, 'areas');
+  if (!fs.existsSync(areasRoot)) return [];
+  const areas: LoadedArea[] = [];
+  for (const file of fs.readdirSync(areasRoot).filter((entry) => entry.endsWith('.yml')).sort()) {
+    const full = path.join(areasRoot, file);
+    areas.push({
+      file,
+      frontmatter: areaFrontmatterSchema.parse(readYamlFile(full))
+    });
+  }
+  return areas;
 }
 
 export function loadContent(contentDir = config.contentDir): LoadedTrack[] {
@@ -101,8 +124,16 @@ export function loadContent(contentDir = config.contentDir): LoadedTrack[] {
 export function loadAchievements(contentDir = config.contentDir): LoadedAchievement[] {
   const file = path.join(contentDir, 'achievements.yml');
   if (!fs.existsSync(file)) return [];
-  const data = yaml.load(fs.readFileSync(file, 'utf8')) as { achievements?: LoadedAchievement[] };
-  return data.achievements ?? [];
+  const data = yaml.load(fs.readFileSync(file, 'utf8')) as { achievements?: unknown[] };
+  return (data.achievements ?? []).map((achievement) => {
+    const parsed = achievementFrontmatterSchema.parse(achievement);
+    return {
+      ...parsed,
+      area: parsed.area ?? null,
+      rarity: parsed.rarity,
+      criteria: parsed.criteria
+    };
+  });
 }
 
 export function readLessonBody(contentPath: string, contentDir = config.contentDir): string {

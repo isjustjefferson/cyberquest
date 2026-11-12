@@ -10,10 +10,12 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@codemirror/lang-sql": "6.10.0",
     "@cyberquest/shared": "workspace:*",
     "@fontsource/inter": "^5.0.20",
     "@fontsource/jetbrains-mono": "^5.0.20",
     "@tanstack/react-query": "^5.51.1",
+    "@uiw/react-codemirror": "4.25.12",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/xterm": "^5.5.0",
     "canvas-confetti": "^1.9.3",

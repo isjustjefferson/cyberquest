@@ -1,0 +1,5 @@
+slug: "01-fundamentos-de-bancos-de-dados"
+title: "Fundamentos de bancos de dados"
+description: "O problema que um banco relacional resolve, as garantias ACID e o lugar do PostgreSQL no ecossistema."
+position: 0
+xp_reward: 100

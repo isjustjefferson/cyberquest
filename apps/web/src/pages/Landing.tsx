@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRight,
   BookOpen,
+  Compass,
   FlaskConical,
   Gamepad2,
   ShieldCheck,
@@ -17,8 +18,10 @@ import { Mascot } from '../components/Mascot';
 
 export function Landing() {
   const { user } = useAuth();
-  const tracksQuery = useQuery({ queryKey: ['public-tracks'], queryFn: api.tracks, staleTime: 60_000 });
+  const tracksQuery = useQuery({ queryKey: ['public-tracks'], queryFn: () => api.tracks(), staleTime: 60_000 });
+  const areasQuery = useQuery({ queryKey: ['public-areas'], queryFn: api.areas, staleTime: 60_000 });
   const tracks = tracksQuery.data?.tracks ?? [];
+  const areas = areasQuery.data?.areas.filter((area) => area.status === 'active') ?? [];
   const totalLessons = tracks.reduce((sum, track) => sum + track.totalLessons, 0);
 
   return (
@@ -115,7 +118,47 @@ export function Landing() {
           </div>
         </section>
 
-        <section id="como-funciona" className="border-y border-border bg-surface/40 py-16">
+        {areas.length > 0 ? (
+          <section className="border-y border-border bg-surface/40 py-16">
+            <div className="mx-auto max-w-6xl px-4">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+                    <Compass size={14} /> Áreas
+                  </p>
+                  <h2 className="mt-2 text-2xl font-bold md:text-3xl">Escolha uma especialidade</h2>
+                  <p className="mt-2 text-sm text-muted">Jornadas independentes, com progresso e XP por área.</p>
+                </div>
+                <Link to={user ? '/areas' : '/register'} className="btn-secondary">
+                  Explorar áreas <ArrowRight size={15} />
+                </Link>
+              </div>
+              <div className="mt-8 grid gap-4 md:grid-cols-2">
+                {areas.map((area) => (
+                  <Link
+                    key={area.slug}
+                    to={user ? `/areas/${area.slug}` : '/register'}
+                    className="card group flex items-center gap-4 p-5 transition hover:-translate-y-0.5 hover:border-accent/40"
+                  >
+                    <div
+                      className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-bg text-3xl ring-1 ring-border"
+                      style={{ color: area.color }}
+                    >
+                      {area.icon}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold group-hover:text-accent">{area.title}</h3>
+                      <p className="mt-1 line-clamp-2 text-sm text-muted">{area.description}</p>
+                      <p className="mt-2 text-[11px] text-muted">{area.totalLessons} lições disponíveis</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        <section id="como-funciona" className="border-y border-border bg-surface/70 py-16">
           <div className="mx-auto max-w-6xl px-4">
             <h2 className="text-center text-2xl font-bold md:text-3xl">Três passos para sair do zero</h2>
             <p className="mx-auto mt-2 max-w-2xl text-center text-sm text-muted">
@@ -157,7 +200,7 @@ export function Landing() {
               <h2 className="text-2xl font-bold md:text-3xl">Uma trilha para cada obsessão</h2>
               <p className="mt-2 text-sm text-muted">Do terminal básico ao red team. Você escolhe o caminho.</p>
             </div>
-            <Link to={user ? '/trilhas' : '/register'} className="btn-secondary">
+            <Link to={user ? '/areas' : '/register'} className="btn-secondary">
               Ver todas <ArrowRight size={15} />
             </Link>
           </div>

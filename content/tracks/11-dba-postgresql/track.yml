@@ -1,0 +1,8 @@
+slug: "11-dba-postgresql"
+title: "DBA PostgreSQL"
+description: "Do primeiro SELECT à operação de bancos em produção: SQL, modelagem, administração, desempenho, backup, replicação e automação. Assuma o papel de DBA da Padaria Byte."
+icon: "🐘"
+color: "#336791"
+area: bancos-de-dados
+position: 1
+status: available

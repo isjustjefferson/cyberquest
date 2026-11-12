@@ -3,5 +3,6 @@ title: "Segurança de Redes"
 description: "Como redes são defendidas e observadas: firewalls, IDS, VPN, análise de tráfego e reconhecimento com nmap."
 icon: "🌐"
 color: "azul"
+area: ciberseguranca
 position: 4
 status: available

@@ -1,0 +1,5 @@
+slug: "07-programacao-no-banco"
+title: "Programação no banco"
+description: "PL/pgSQL, triggers, extensões, FDW e busca textual para colocar lógica perto dos dados com segurança e critério."
+position: 6
+xp_reward: 200

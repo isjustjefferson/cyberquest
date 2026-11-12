@@ -9,7 +9,7 @@ import { XpBar } from '../components/XpBar';
 
 export function Profile() {
   const { user } = useAuth();
-  const achievements = useQuery({ queryKey: ['achievements'], queryFn: api.achievements });
+  const achievements = useQuery({ queryKey: ['achievements', ''], queryFn: () => api.achievements() });
   if (!user) return null;
   const unlocked = achievements.data?.achievements.filter((item) => item.unlockedAt) ?? [];
 

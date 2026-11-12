@@ -3,5 +3,6 @@ title: "Blue Team"
 description: "A visão do defensor: observar, detectar, responder e endurecer sistemas. Entender o lado azul faz de você um testador melhor."
 icon: "🛡️"
 color: "ciano-claro"
+area: ciberseguranca
 position: 7
 status: available

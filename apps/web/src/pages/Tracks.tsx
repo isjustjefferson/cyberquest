@@ -7,7 +7,7 @@ import { Loading, ErrorState } from '../components/Loading';
 
 export function Tracks() {
   const [search, setSearch] = useState('');
-  const query = useQuery({ queryKey: ['tracks'], queryFn: api.tracks });
+  const query = useQuery({ queryKey: ['tracks'], queryFn: () => api.tracks() });
   if (query.isLoading) return <Loading label="Carregando trilhas..." />;
   if (query.isError || !query.data) return <ErrorState message={errorMessage(query.error)} onRetry={() => void query.refetch()} />;
   const filtered = query.data.tracks.filter((track) =>

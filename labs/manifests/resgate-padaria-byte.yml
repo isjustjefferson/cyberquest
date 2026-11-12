@@ -1,0 +1,164 @@
+slug: "resgate-padaria-byte"
+title: "O plantão da Padaria Byte"
+description: "Black Friday, 3 da manhã: conexões esgotadas, consulta lenta, bloat, acesso indevido e um DELETE sem WHERE. Resolva as fases e escreva o post-mortem."
+difficulty: 5
+ttl_minutes: 90
+xp_reward: 500
+network:
+  internal: true
+containers:
+  workstation:
+    image: "cyberquest/dba-workstation:latest"
+    hostname: "workstation"
+    ephemeral_volumes:
+      - "/home/student"
+  targets:
+    - name: "db"
+      image: "postgres:16"
+      hostname: "db"
+      command:
+        - "postgres"
+        - "-c"
+        - "shared_preload_libraries=pg_stat_statements"
+        - "-c"
+        - "max_connections=50"
+      env:
+        POSTGRES_PASSWORD: "{{generated_password}}"
+        POSTGRES_DB: "padaria"
+      init_scripts:
+        - "content/datasets/padaria_byte.sql"
+        - "labs/sql/zz_resgate_setup.sh"
+      ephemeral_volumes:
+        - "/var/lib/postgresql/data"
+      resources:
+        memory_mb: 768
+        cpus: 1
+      healthcheck:
+        cmd: "pg_isready -h 127.0.0.1 -U postgres"
+        timeout_s: 120
+    - name: "session-worker"
+      image: "cyberquest/dba-workstation:latest"
+      hostname: "session-worker"
+      env:
+        PGHOST: "db"
+        PGUSER: "postgres"
+        PGDATABASE: "padaria"
+        PGPASSWORD: "{{generated_password}}"
+      command:
+        - "bash"
+        - "-lc"
+        - 'until pg_isready -h db -U postgres -d padaria -q; do sleep 1; done; for i in $(seq 1 42); do psql -X -w -h db -U postgres -d padaria -c "SELECT pg_sleep(3600)" >/dev/null 2>&1 & done; wait'
+      resources:
+        memory_mb: 256
+        cpus: 0.5
+      healthcheck:
+        cmd: "test $(pgrep -x psql | wc -l) -ge 35"
+        timeout_s: 60
+terminal:
+  container: "db"
+  user: "postgres"
+objectives:
+  - id: "conexoes-esgotadas"
+    title: "Fase 1: encontre e encerre as sessões que esgotam conexões"
+    xp: 80
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: >-
+        SELECT (count(*) = 0)::text FROM pg_stat_activity
+        WHERE query ILIKE '%pg_sleep%' AND pid <> pg_backend_pid();
+      expect:
+        equals: "true"
+    hints:
+      - text: "Consulte pg_stat_activity e encerre apenas as sessões do worker: SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE query ILIKE '%pg_sleep%' AND pid <> pg_backend_pid();"
+        cost_bits: 10
+  - id: "consulta-lenta"
+    title: "Fase 2: crie o índice adequado para a consulta lenta"
+    xp: 100
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: >-
+        SELECT (count(*) > 0)::text FROM pg_indexes
+        WHERE tablename = 'pedidos' AND indexdef ILIKE '%(status)%';
+      expect:
+        equals: "true"
+    hints:
+      - text: "Crie o índice sem bloquear escritas: CREATE INDEX CONCURRENTLY idx_pedidos_status ON pedidos (status);"
+        cost_bits: 12
+  - id: "bloat-e-autovacuum"
+    title: "Fase 3: limpe o bloat e ajuste o autovacuum de clientes"
+    xp: 100
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: >-
+        SELECT (n_dead_tup < 10
+                AND coalesce(array_to_string(c.reloptions, ','), '') LIKE '%autovacuum_enabled=true%'
+                AND coalesce(array_to_string(c.reloptions, ','), '') ~ 'autovacuum_vacuum_scale_factor=0\.(0[0-9]|1)')::text
+        FROM pg_stat_user_tables s
+        JOIN pg_class c ON c.oid = s.relid
+        WHERE s.relname = 'clientes';
+      expect:
+        equals: "true"
+    hints:
+      - text: "ALTER TABLE clientes SET (autovacuum_enabled = true, autovacuum_vacuum_scale_factor = 0.05); VACUUM (ANALYZE) clientes;"
+        cost_bits: 14
+  - id: "regra-trust"
+    title: "Fase 4: remova a regra trust aberta sem derrubar o acesso"
+    xp: 100
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: >-
+        SELECT (count(*) = 0)::text FROM pg_hba_file_rules
+        WHERE auth_method = 'trust' AND type = 'host'
+          AND address = '0.0.0.0' AND netmask = '0.0.0.0';
+      expect:
+        equals: "true"
+    hints:
+      - text: "Edite $PGDATA/pg_hba.conf, remova a linha 'host all all 0.0.0.0/0 trust' e rode SELECT pg_reload_conf();."
+        cost_bits: 14
+  - id: "desastre-recuperado"
+    title: "Fase 5: restaure os pedidos apagados e comprove a contagem"
+    xp: 120
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: >-
+        SELECT ( (SELECT count(*) FROM pedidos) = 300
+                 AND (SELECT count(*) FROM itens_pedido) = 800 )::text;
+      expect:
+        equals: "true"
+    hints:
+      - text: "Restaure os dados do dump para as tabelas de estágio pedidos_ultima_hora/itens_ultima_hora; depois copie-os para pedidos e itens_pedido."
+        cost_bits: 16
+  - id: "post-mortem"
+    title: "Fase 6: escreva o post-mortem do incidente"
+    xp: 50
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: >-
+        SELECT (count(*) >= 1 AND bool_and(
+          length(causa) >= 30 AND length(impacto) >= 20
+          AND length(linha_do_tempo) >= 20 AND length(acoes) >= 30
+        ))::text FROM postmortem;
+      expect:
+        equals: "true"
+    hints:
+      - text: "INSERT INTO postmortem (causa, impacto, linha_do_tempo, acoes) VALUES (...); descreva causa, impacto, horários e ações preventivas."
+        cost_bits: 8
+writeup: "writeups/resgate-padaria-byte.md"

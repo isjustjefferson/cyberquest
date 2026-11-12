@@ -24,3 +24,7 @@ export function dynamicFlag(userId: number, objectiveId: string, nonce: string):
 export function newNonce(): string {
   return crypto.randomBytes(16).toString('hex');
 }
+
+export function generatedPassword(nonce: string): string {
+  return hmacHex(config.LAB_FLAG_SECRET, `dba-password:${nonce}`).slice(0, 16);
+}

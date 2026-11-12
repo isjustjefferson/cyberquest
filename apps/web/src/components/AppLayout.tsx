@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Award,
-  BookOpen,
   ChevronRight,
+  Compass,
   Crown,
   FlaskConical,
   Gauge,
@@ -26,7 +26,7 @@ import { XpBar } from './XpBar';
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: Gauge },
-  { to: '/trilhas', label: 'Trilhas', icon: BookOpen },
+  { to: '/areas', label: 'Áreas', icon: Compass },
   { to: '/labs', label: 'Labs', icon: FlaskConical },
   { to: '/revisao', label: 'Revisão', icon: RotateCcw },
   { to: '/ranking', label: 'Ranking', icon: Crown },
@@ -38,8 +38,12 @@ const navItems = [
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const dashboard = useQuery({ queryKey: ['dashboard'], queryFn: api.dashboard, staleTime: 30_000 });
+  const areasQuery = useQuery({ queryKey: ['areas'], queryFn: api.areas, staleTime: 60_000 });
   const dueCount = dashboard.data?.dueCount ?? 0;
+  const activeAreas = (areasQuery.data?.areas ?? []).filter((area) => area.status === 'active');
+  const currentArea = location.pathname.match(/^\/areas\/([^/]+)/)?.[1] ?? '';
 
   return (
     <div className="flex h-full flex-col">
@@ -54,6 +58,32 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <p className="mt-1 text-[10px] uppercase tracking-[0.22em] text-muted">hacking ético</p>
         </div>
       </div>
+
+      {activeAreas.length > 1 ? (
+        <div className="px-3 pb-2">
+          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+            Área atual
+          </label>
+          <select
+            className="input py-1.5 text-xs"
+            value={currentArea}
+            onChange={(event) => {
+              if (event.target.value) {
+                navigate(`/areas/${event.target.value}`);
+                onNavigate?.();
+              }
+            }}
+            aria-label="Selecionar área"
+          >
+            <option value="">Selecionar área...</option>
+            {activeAreas.map((area) => (
+              <option key={area.slug} value={area.slug}>
+                {area.title}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
         {navItems.map((item) => (

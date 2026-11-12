@@ -1,0 +1,82 @@
+slug: "pitr"
+title: "PITR: recuperação a um ponto no tempo"
+description: "Um DROP TABLE apagou os pedidos da Padaria Byte. Use a cópia de recuperação, restaure o estado anterior ao incidente e valide os dados."
+difficulty: 4
+ttl_minutes: 45
+xp_reward: 350
+network:
+  internal: true
+containers:
+  workstation:
+    image: "cyberquest/dba-workstation:latest"
+    hostname: "workstation"
+    ephemeral_volumes:
+      - "/home/student"
+  targets:
+    - name: "db"
+      image: "postgres:16"
+      hostname: "db"
+      env:
+        POSTGRES_PASSWORD: "{{generated_password}}"
+        POSTGRES_DB: "padaria"
+      init_scripts:
+        - "content/datasets/padaria_byte.sql"
+        - "labs/sql/zz_pitr_setup.sh"
+      ephemeral_volumes:
+        - "/var/lib/postgresql/data"
+      resources:
+        memory_mb: 512
+        cpus: 0.5
+      healthcheck:
+        cmd: "pg_isready -h 127.0.0.1 -U postgres"
+        timeout_s: 90
+terminal:
+  container: "db"
+  user: "postgres"
+objectives:
+  - id: "backup-de-seguranca"
+    title: "Faça um backup do estado atual antes de recuperar"
+    xp: 80
+    verify:
+      type: "cmd"
+      container: "db"
+      user: "postgres"
+      query: "test -s /var/lib/postgresql/antes_da_recuperacao.dump"
+      expect:
+        exit_code: 0
+    hints:
+      - text: "Rode: pg_dump -Fc -f /var/lib/postgresql/antes_da_recuperacao.dump padaria"
+        cost_bits: 10
+  - id: "pedidos-recuperados"
+    title: "Restaure os 800 pedidos a partir da cópia de recuperação"
+    xp: 150
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: "SELECT (count(*) = 800)::text FROM pedidos;"
+      expect:
+        equals: "true"
+    hints:
+      - text: "A cópia está em /var/lib/postgresql/pedidos_antes_do_incidente.dump. Use pg_restore -a -t pedidos -d padaria <arquivo>."
+        cost_bits: 14
+  - id: "integridade-preservada"
+    title: "Confirme que clientes e produtos continuam íntegros"
+    xp: 120
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: >-
+        SELECT (SELECT count(*) FROM clientes) = 40
+           AND (SELECT count(*) FROM produtos) = 25
+           AND (SELECT count(DISTINCT id) FROM pedidos) = 800
+        AS ok;
+      expect:
+        equals: "true"
+    hints:
+      - text: "Valide contagens e unicidade: clientes 40, produtos 25, pedidos 800 sem IDs duplicados."
+        cost_bits: 8
+writeup: "writeups/pitr.md"

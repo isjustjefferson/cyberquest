@@ -5,6 +5,7 @@ import { config } from '../../config';
 import { getDb } from '../../db/connection';
 import { logger } from '../../logger';
 import { verifyToken } from '../auth/service';
+import { generatedPassword } from '../../utils/crypto';
 import { getDocker } from './docker';
 import { loadManifest } from './manifest';
 import type { SessionRow } from './orchestrator';
@@ -65,32 +66,46 @@ export function setupTerminalWebSocket(server: Server): WebSocketServer {
     let stream: Duplex | null = null;
     try {
       const docker = getDocker();
-      loadManifest(session.lab_slug);
+      const manifest = loadManifest(session.lab_slug);
+      const targetName =
+        manifest.terminal?.container ?? (manifest.containers.workstation ? 'workstation' : 'attacker');
+      const user = manifest.terminal?.user ?? 'student';
       const containers = await docker.listContainers({
         all: true,
         filters: {
           label: [
             `cyberquest.session=${session.id}`,
-            'cyberquest.role=attacker',
+            `cyberquest.name=${targetName}`,
             'cyberquest.managed=true'
           ]
         }
       });
-      const attacker = containers[0];
-      if (!attacker) {
-        ws.send('\r\n[CyberQuest] Container attacker não encontrado.\r\n');
+      const chosen = containers[0];
+      if (!chosen) {
+        ws.send(`\r\n[CyberQuest] Container ${targetName} não encontrado.\r\n`);
         ws.close();
         return;
       }
-      const container = docker.getContainer(attacker.Id);
+      const target = manifest.containers.targets?.find((item) => item.name === targetName);
+      const env = [`TERM=xterm-256color`, `PS1=${user}@cyberquest:\\w$ `];
+      if (target && target.image.startsWith('postgres:')) {
+        env.push(
+          'PGHOST=127.0.0.1',
+          'PGUSER=postgres',
+          `PGPASSWORD=${generatedPassword(session.nonce)}`,
+          `PGDATABASE=${target.env?.POSTGRES_DB ?? 'postgres'}`,
+          'PGDATA=/var/lib/postgresql/data'
+        );
+      }
+      const container = docker.getContainer(chosen.Id);
       const exec = await container.exec({
         Cmd: ['/bin/bash'],
         AttachStdin: true,
         AttachStdout: true,
         AttachStderr: true,
         Tty: true,
-        User: 'student',
-        Env: ['TERM=xterm-256color', 'PS1=student@cyberquest:\\w$ ']
+        User: user,
+        Env: env
       });
       stream = (await exec.start({ hijack: true, stdin: true, Tty: true })) as unknown as Duplex;
       stream.on('data', (chunk: Buffer) => {

@@ -1,0 +1,103 @@
+slug: "replicacao-streaming"
+title: "Replicação em streaming"
+description: "Configure um standby real para a Padaria Byte, confirme o streaming do WAL, valide a leitura e promova a réplica."
+difficulty: 4
+ttl_minutes: 60
+xp_reward: 350
+network:
+  internal: true
+containers:
+  workstation:
+    image: "cyberquest/dba-workstation:latest"
+    hostname: "workstation"
+    ephemeral_volumes:
+      - "/home/student"
+  targets:
+    - name: "primary"
+      image: "postgres:16"
+      hostname: "primary"
+      env:
+        POSTGRES_PASSWORD: "{{generated_password}}"
+        POSTGRES_DB: "padaria"
+        PGDATA: "/var/lib/postgresql/data/primary"
+      init_scripts:
+        - "content/datasets/padaria_byte.sql"
+        - "labs/sql/zz_replicacao_setup.sh"
+      ephemeral_volumes:
+        - "/var/lib/postgresql/data"
+      resources:
+        memory_mb: 512
+        cpus: 0.5
+      healthcheck:
+        cmd: "pg_isready -h 127.0.0.1 -U postgres"
+        timeout_s: 120
+    - name: "standby"
+      image: "postgres:16"
+      hostname: "standby"
+      env:
+        POSTGRES_PASSWORD: "{{generated_password}}"
+        POSTGRES_DB: "padaria"
+        PGPASSWORD: "{{generated_password}}"
+        PGDATA: "/var/lib/postgresql/data/standby"
+      init_scripts:
+        - "labs/sql/zz_replica_standby.sh"
+      command:
+        - "bash"
+        - "/docker-entrypoint-initdb.d/zz_replica_standby.sh"
+      ephemeral_volumes:
+        - "/var/lib/postgresql/data"
+      resources:
+        memory_mb: 512
+        cpus: 0.5
+      healthcheck:
+        cmd: "pg_isready -h 127.0.0.1 -U postgres"
+        timeout_s: 120
+terminal:
+  container: "standby"
+  user: "postgres"
+objectives:
+  - id: "standby-conectado"
+    title: "Confirme que o standby está recebendo WAL"
+    xp: 100
+    verify:
+      type: "sql"
+      container: "primary"
+      user: "postgres"
+      database: "padaria"
+      query: >-
+        SELECT (count(*) >= 1)::text FROM pg_stat_replication
+        WHERE state = 'streaming';
+      expect:
+        equals: "true"
+    hints:
+      - text: "No primário: SELECT * FROM pg_stat_replication;. No standby: SELECT * FROM pg_stat_wal_receiver;."
+        cost_bits: 12
+  - id: "dados-replicados"
+    title: "Valide que os dados da Padaria Byte aparecem no standby"
+    xp: 120
+    verify:
+      type: "sql"
+      container: "standby"
+      user: "postgres"
+      database: "padaria"
+      query: "SELECT (count(*) = 40)::text FROM clientes;"
+      expect:
+        equals: "true"
+    hints:
+      - text: "No standby, rode SELECT count(*) FROM clientes;. Se o streaming estiver ativo, o valor acompanha o primário."
+        cost_bits: 8
+  - id: "promocao"
+    title: "Promova o standby e confirme que ele aceita escrita"
+    xp: 130
+    verify:
+      type: "sql"
+      container: "standby"
+      user: "postgres"
+      database: "padaria"
+      query: "SELECT (NOT pg_is_in_recovery())::text;"
+      expect:
+        equals: "true"
+    hints:
+      - text: "No standby: SELECT pg_promote();. Depois confirme com SELECT pg_is_in_recovery();."
+        cost_bits: 14
+writeup: "writeups/replicacao-streaming.md"

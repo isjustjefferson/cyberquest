@@ -9,6 +9,7 @@ const dockerState = vi.hoisted(() => {
     start: ReturnType<typeof vi.fn>;
     stop: ReturnType<typeof vi.fn>;
     remove: ReturnType<typeof vi.fn>;
+    putArchive: ReturnType<typeof vi.fn>;
     exec: ReturnType<typeof vi.fn>;
   }
 
@@ -19,26 +20,34 @@ const dockerState = vi.hoisted(() => {
     remove: ReturnType<typeof vi.fn>;
   }
 
+  interface FakeVolume {
+    Name: string;
+    Labels: Record<string, string>;
+  }
+
   const state = {
     available: true,
     failStartRole: null as string | null,
     sequence: 0,
     containers: [] as FakeContainer[],
     networks: [] as FakeNetwork[],
+    volumes: [] as FakeVolume[],
     reset() {
       this.available = true;
       this.failStartRole = null;
       this.sequence = 0;
       this.containers = [];
       this.networks = [];
+      this.volumes = [];
     }
   };
 
-  function makeStream() {
-    const listeners: Record<string, Array<() => void>> = {};
+  function makeStream(output = 't\n') {
+    const listeners: Record<string, Array<(chunk?: unknown) => void>> = {};
     const stream = {
-      on(event: string, listener: () => void) {
+      on(event: string, listener: (chunk?: unknown) => void) {
         listeners[event] = [...(listeners[event] ?? []), listener];
+        if (event === 'data') queueMicrotask(() => listener(Buffer.from(output)));
         if (event === 'end') queueMicrotask(() => listener());
         return stream;
       }
@@ -77,6 +86,7 @@ const dockerState = vi.hoisted(() => {
         remove: vi.fn(async () => {
           container.removed = true;
         }),
+        putArchive: vi.fn(async () => undefined),
         exec: vi.fn(async () => ({
           start: vi.fn(async () => makeStream()),
           inspect: vi.fn(async () => ({ ExitCode: 0 }))
@@ -94,6 +104,29 @@ const dockerState = vi.hoisted(() => {
       const network = state.networks.find((item) => item.id === id);
       if (!network) throw new Error(`Rede não encontrada: ${id}`);
       return network;
+    },
+    async createVolume(options: { Name: string; Labels?: Record<string, string> }) {
+      const volume: FakeVolume = { Name: options.Name, Labels: options.Labels ?? {} };
+      state.volumes.push(volume);
+      return volume;
+    },
+    getVolume(name: string) {
+      return {
+        remove: vi.fn(async () => {
+          state.volumes = state.volumes.filter((volume) => volume.Name !== name);
+        })
+      };
+    },
+    async listVolumes(filters?: { label?: string[] }) {
+      const labels = filters?.label ?? [];
+      return {
+        Volumes: state.volumes.filter((volume) =>
+          labels.every((entry) => {
+            const [key, value] = entry.split('=');
+            return volume.Labels[key] === value;
+          })
+        )
+      };
     },
     async listNetworks(filters?: { label?: string[] }) {
       return state.networks
@@ -292,6 +325,38 @@ describe('LabOrchestrator com Docker mockado', () => {
     expect(row.status).toBe('expired');
     expect(dockerState.state.networks).toHaveLength(0);
     expect(dockerState.state.containers.every((container) => container.removed)).toBe(true);
+  });
+
+  it('provisiona workstation DBA, volume rotulado e verifica objetivo', async () => {
+    const session = await orchestrator.start(USER_ID, 'psql-primeiros-passos');
+
+    expect(session.status).toBe('running');
+    const containers = dockerState.state.containers;
+    const db = containers.find(
+      (container) => container.options.Labels['cyberquest.role'] === 'target'
+    );
+    const workstation = containers.find(
+      (container) => container.options.Labels['cyberquest.role'] === 'workstation'
+    );
+
+    expect(workstation?.options.Image).toBe('cyberquest/dba-workstation:latest');
+    expect(workstation?.options.Labels['cyberquest.name']).toBe('workstation');
+    expect(db?.options.Labels['cyberquest.name']).toBe('db');
+    expect(db?.options.HostConfig.CapAdd).toEqual(
+      expect.arrayContaining(['CHOWN', 'SETUID', 'SETGID', 'DAC_OVERRIDE', 'FOWNER'])
+    );
+    expect(db?.options.HostConfig.Binds?.[0]).toMatch(/:\/var\/lib\/postgresql\/data$/);
+    expect(dockerState.state.volumes).toHaveLength(1);
+    expect(dockerState.state.volumes[0].Labels['cyberquest.managed']).toBe('true');
+    expect(dockerState.state.volumes[0].Labels['cyberquest.session']).toBe(session.id);
+    expect(db?.putArchive).toHaveBeenCalled();
+
+    const outcome = await orchestrator.verify(session.id, USER_ID, 'explorar');
+    expect(outcome.passed).toBe(true);
+    expect(outcome.objective.id).toBe('explorar');
+
+    await orchestrator.stop(session.id, USER_ID);
+    expect(dockerState.state.volumes).toHaveLength(0);
   });
 
   it('permite estender a sessão apenas uma vez', async () => {

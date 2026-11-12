@@ -21,9 +21,13 @@ export function TrackDetail() {
 
   return (
     <div className="space-y-6">
-      <Link to="/trilhas" className="inline-flex items-center gap-2 text-sm text-muted hover:text-text">
-        <ArrowLeft size={15} /> Todas as trilhas
-      </Link>
+      <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
+        <Link to={`/areas/${track.areaSlug}`} className="inline-flex items-center gap-2 hover:text-text">
+          <ArrowLeft size={15} /> {track.areaTitle}
+        </Link>
+        <span className="opacity-40">/</span>
+        <Link to="/areas" className="hover:text-text">Todas as áreas</Link>
+      </div>
 
       <header className="card relative overflow-hidden p-6">
         <div className="absolute -right-16 -top-20 text-[200px] opacity-[0.04]">{track.icon}</div>

@@ -1,0 +1,95 @@
+slug: "backup-e-restore"
+title: "Backup e restauração"
+description: "Alguém apagou a tabela clientes da Padaria Byte. Faça um backup do estado atual, restaure só o necessário e preserve os pedidos novos."
+difficulty: 3
+ttl_minutes: 45
+xp_reward: 300
+network:
+  internal: true
+containers:
+  workstation:
+    image: "cyberquest/dba-workstation:latest"
+    hostname: "workstation"
+    ephemeral_volumes:
+      - "/home/student"
+  targets:
+    - name: "db"
+      image: "postgres:16"
+      hostname: "db"
+      env:
+        POSTGRES_PASSWORD: "{{generated_password}}"
+        POSTGRES_DB: "padaria"
+      init_scripts:
+        - "content/datasets/padaria_byte.sql"
+        - "labs/sql/zz_backup_setup.sql"
+      ephemeral_volumes:
+        - "/var/lib/postgresql/data"
+      resources:
+        memory_mb: 512
+        cpus: 0.5
+      healthcheck:
+        cmd: "pg_isready -h 127.0.0.1 -U postgres"
+        timeout_s: 90
+    - name: "backup"
+      image: "cyberquest/dba-workstation:latest"
+      hostname: "backup"
+      env:
+        PGPASSWORD: "{{generated_password}}"
+      files:
+        - source: "labs/sql/clientes_old.sql"
+          destination: "/etc"
+      command:
+        - "bash"
+        - "-lc"
+        - "until pg_isready -h db -U postgres -q; do sleep 1; done; mkdir -p /home/student/backup; cp /etc/clientes_old.sql /home/student/backup/clientes.dump; sleep infinity"
+      ephemeral_volumes:
+        - "/home/student"
+      resources:
+        memory_mb: 128
+        cpus: 0.25
+terminal:
+  container: "workstation"
+  user: "student"
+objectives:
+  - id: "backup-antes"
+    title: "Faça um backup do estado atual antes de restaurar"
+    xp: 60
+    verify:
+      type: "cmd"
+      container: "workstation"
+      user: "student"
+      query: "test -s /home/student/antes.dump"
+      expect:
+        exit_code: 0
+    hints:
+      - text: "Rode: pg_dump -Fc -f ~/antes.dump padaria (PGHOST e PGPASSWORD já estão configurados)."
+        cost_bits: 10
+  - id: "restaurar-clientes"
+    title: "Restaure apenas a tabela clientes"
+    xp: 120
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: "SELECT (count(*) = 40)::text FROM clientes;"
+      expect:
+        equals: "true"
+    hints:
+      - text: "O dump antigo está em /home/student/backup/clientes.dump. Aplique com psql -f, sem apagar o banco inteiro."
+        cost_bits: 12
+  - id: "pedidos-preservados"
+    title: "Confirme que os 800 pedidos continuam presentes"
+    xp: 120
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: "SELECT (count(*) = 800)::text FROM pedidos;"
+      expect:
+        equals: "true"
+    hints:
+      - text: "Conte os pedidos: SELECT count(*) FROM pedidos;. Não use DROP DATABASE nem restaure o cluster inteiro."
+        cost_bits: 10
+writeup: "writeups/backup-e-restore.md"

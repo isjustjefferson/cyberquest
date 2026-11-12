@@ -1,5 +1,46 @@
 import type { ExerciseType, PublicExercise } from './exercises';
 
+export interface AreaNextLesson {
+  slug: string;
+  title: string;
+  trackSlug: string;
+  trackTitle: string;
+  moduleTitle: string;
+  status: 'in_progress' | 'available';
+}
+
+export interface AreaSummary {
+  id: number;
+  slug: string;
+  title: string;
+  description: string;
+  icon: string;
+  color: string;
+  position: number;
+  status: 'active' | 'coming_soon';
+  totalLessons: number;
+  completedLessons: number;
+  percent: number;
+  xp: number;
+  nextLesson: AreaNextLesson | null;
+}
+
+export interface AreaDetail extends AreaSummary {
+  tracks: TrackSummary[];
+}
+
+export interface AreaStats {
+  id: number;
+  slug: string;
+  title: string;
+  icon: string;
+  color: string;
+  xp: number;
+  completedLessons: number;
+  totalLessons: number;
+  percent: number;
+}
+
 export interface TrackSummary {
   id: number;
   slug: string;
@@ -9,6 +50,8 @@ export interface TrackSummary {
   color: string;
   position: number;
   status: 'available' | 'coming_soon';
+  areaSlug: string;
+  areaTitle: string;
   totalLessons: number;
   completedLessons: number;
   percent: number;
@@ -50,6 +93,8 @@ export interface LessonDetail {
   estMinutes: number;
   xp: number;
   status: 'complete' | 'draft';
+  areaSlug: string;
+  areaTitle: string;
   trackSlug: string;
   trackTitle: string;
   moduleSlug: string;
@@ -102,6 +147,7 @@ export interface AchievementSummary {
   description: string;
   icon: string;
   rarity: 'comum' | 'rara' | 'epica' | 'lendaria';
+  areaSlug: string | null;
   unlockedAt: string | null;
 }
 
@@ -142,6 +188,7 @@ export interface LabObjectivePublic {
   id: string;
   title: string;
   xp: number;
+  mode: 'flag' | 'auto';
   hints: Array<{ text: string; costBits: number }>;
   completed: boolean;
   hintsUsed: number;
@@ -168,11 +215,21 @@ export interface LabSessionPublic {
   errorMessage?: string | null;
 }
 
+export interface LabManifestVerify {
+  type: 'sql' | 'cmd';
+  container: string;
+  user?: string;
+  database?: string;
+  query: string;
+  expect: { equals?: string; matches?: string; exit_code?: number };
+}
+
 export interface LabManifestObjective {
   id: string;
   title: string;
   xp: number;
   flag_mode?: 'dynamic' | 'static';
+  verify?: LabManifestVerify;
   hints?: Array<{ text: string; cost_bits: number }>;
 }
 
@@ -181,8 +238,24 @@ export interface LabManifestContainer {
   image: string;
   hostname?: string;
   env?: Record<string, string>;
+  command?: string[];
+  init_scripts?: string[];
+  files?: Array<{ source: string; destination: string }>;
+  ephemeral_volumes?: string[];
+  resources?: { memory_mb?: number; cpus?: number };
   expose_web_port?: number;
-  healthcheck?: { path?: string; timeout_s?: number };
+  healthcheck?: { path?: string; cmd?: string; timeout_s?: number };
+}
+
+export interface LabManifestWorkstation {
+  image: string;
+  hostname?: string;
+  env?: Record<string, string>;
+}
+
+export interface LabManifestTerminal {
+  container?: string;
+  user?: string;
 }
 
 export interface LabManifest {
@@ -194,9 +267,11 @@ export interface LabManifest {
   xp_reward: number;
   network?: { internal?: boolean };
   containers: {
-    attacker: { image: string; hostname?: string };
+    attacker?: { image: string; hostname?: string };
+    workstation?: LabManifestWorkstation;
     targets?: LabManifestContainer[];
   };
+  terminal?: LabManifestTerminal;
   objectives: LabManifestObjective[];
   writeup?: string;
 }

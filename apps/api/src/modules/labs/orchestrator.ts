@@ -1,21 +1,27 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
 import net from 'node:net';
+import { Readable } from 'node:stream';
+import path from 'node:path';
 import type Docker from 'dockerode';
 import type { ContainerCreateOptions, Network } from 'dockerode';
 import {
   LAB_SECURITY,
   type LabDetail,
   type LabManifest,
+  type LabManifestContainer,
+  type LabManifestObjective,
   type LabSessionPublic
 } from '@cyberquest/shared';
 import type { DB } from '../../db/connection';
 import { config } from '../../config';
 import { logger } from '../../logger';
 import { AppError } from '../../utils/errors';
-import { dynamicFlag, newNonce } from '../../utils/crypto';
+import { dynamicFlag, generatedPassword, newNonce } from '../../utils/crypto';
 import { getUser } from '../gamification/service';
 import { getDocker, isDockerAvailable } from './docker';
-import { loadManifest, loadWriteup } from './manifest';
+import { loadManifest, loadWriteup, resolveLabFile } from './manifest';
+import { createTarFile } from './tar';
 import { nowIso } from '../../utils/time';
 
 interface SessionRow {
@@ -40,6 +46,19 @@ interface CreatedResources {
   proxyPorts: Record<string, number>;
 }
 
+interface ExecResult {
+  exitCode: number;
+  output: string;
+}
+
+export interface VerifyOutcome {
+  passed: boolean;
+  message: string;
+  objective: LabManifestObjective;
+}
+
+const PG_CAPS = ['CHOWN', 'SETUID', 'SETGID', 'DAC_OVERRIDE', 'FOWNER'];
+
 function envKeyFor(objectiveId: string): string {
   return `CQ_FLAG_${objectiveId.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`;
 }
@@ -51,6 +70,31 @@ function labelsFor(sessionId: string, userId: number, extra: Record<string, stri
     'cyberquest.user': String(userId),
     ...extra
   };
+}
+
+function pgMajor(): string {
+  return process.env.LAB_PG_MAJOR ?? '16';
+}
+
+function resolvePlaceholders(value: string, password: string): string {
+  return value
+    .replace(/\{\{\s*generated_password\s*\}\}/g, password)
+    .replace(/\$\{\s*PG_MAJOR\s*\}/g, pgMajor());
+}
+
+function resolveEnv(
+  env: Record<string, string> | undefined,
+  password: string
+): Record<string, string> {
+  const resolved: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env ?? {})) {
+    resolved[key] = resolvePlaceholders(value, password);
+  }
+  return resolved;
+}
+
+function isPostgres(base: LabManifestContainer): boolean {
+  return base.image.startsWith('postgres:');
 }
 
 function freePort(): Promise<number> {
@@ -71,29 +115,85 @@ function freePort(): Promise<number> {
   });
 }
 
-async function waitForPort(docker: Docker, containerId: string, host: string, port: number): Promise<void> {
+async function runExec(
+  docker: Docker,
+  containerId: string,
+  cmd: string[],
+  options: { user?: string; env?: string[]; timeoutMs?: number } = {}
+): Promise<ExecResult> {
   const container = docker.getContainer(containerId);
+  const exec = await container.exec({
+    Cmd: cmd,
+    User: options.user,
+    Env: options.env,
+    AttachStdout: true,
+    AttachStderr: true,
+    Tty: true
+  });
+  const stream = (await exec.start({
+    hijack: true,
+    stdin: false,
+    Tty: true
+  })) as unknown as NodeJS.ReadableStream;
+  const chunks: Buffer[] = [];
+  const finished = new Promise<void>((resolve, reject) => {
+    stream.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+    stream.on('end', () => resolve());
+    stream.on('error', reject);
+  });
+  const timeoutMs = options.timeoutMs ?? 10_000;
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error('timeout')), timeoutMs);
+  });
+  try {
+    await Promise.race([finished, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+  const info = await exec.inspect();
+  return {
+    exitCode: info.ExitCode ?? -1,
+    output: Buffer.concat(chunks).toString('utf8')
+  };
+}
+
+async function waitForPort(docker: Docker, containerId: string, host: string, port: number): Promise<void> {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     try {
-      const exec = await container.exec({
-        Cmd: ['sh', '-c', `nc -z -w 1 ${host} ${port}`],
-        AttachStdout: true,
-        AttachStderr: true
+      const result = await runExec(docker, containerId, ['sh', '-c', `nc -z -w 1 ${host} ${port}`], {
+        timeoutMs: 3_000
       });
-      const stream = await exec.start({});
-      await new Promise<void>((resolve, reject) => {
-        stream.on('data', () => undefined);
-        stream.on('end', resolve);
-        stream.on('error', reject);
-      });
-      const info = await exec.inspect();
-      if (info.ExitCode === 0) return;
+      if (result.exitCode === 0) return;
     } catch {
       // tenta de novo
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error(`Serviço ${host}:${port} não respondeu ao healthcheck`);
+}
+
+async function waitForCommand(
+  docker: Docker,
+  containerId: string,
+  cmd: string,
+  timeoutS: number,
+  env: string[]
+): Promise<void> {
+  const deadline = Date.now() + timeoutS * 1000;
+  while (Date.now() < deadline) {
+    try {
+      const result = await runExec(docker, containerId, ['sh', '-c', cmd], {
+        timeoutMs: 5_000,
+        env
+      });
+      if (result.exitCode === 0) return;
+    } catch {
+      // tenta de novo
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(`Serviço não ficou pronto em ${timeoutS}s`);
 }
 
 export class LabOrchestrator {
@@ -192,6 +292,46 @@ export class LabOrchestrator {
     }
   }
 
+  private async createVolumes(
+    docker: Docker,
+    sessionId: string,
+    userId: number,
+    targets: LabManifestContainer[]
+  ): Promise<Map<string, string>> {
+    const volumes = new Map<string, string>();
+    for (const target of targets) {
+      for (const mountPath of target.ephemeral_volumes ?? []) {
+        if (volumes.has(mountPath)) continue;
+        const name = `cq-${sessionId.slice(0, 8)}-${volumes.size}`;
+        try {
+          await docker.createVolume({
+            Name: name,
+            Labels: labelsFor(sessionId, userId, { 'cyberquest.role': 'volume' })
+          });
+        } catch (error) {
+          logger.warn({ err: error, name }, 'Volume já existia ou não pôde ser criado');
+        }
+        volumes.set(mountPath, name);
+      }
+    }
+    return volumes;
+  }
+
+  private async copyIntoContainer(
+    docker: Docker,
+    containerId: string,
+    archivePath: string,
+    files: Array<{ file: string; name: string }>
+  ): Promise<void> {
+    if (files.length === 0) return;
+    const container = docker.getContainer(containerId);
+    for (const entry of files) {
+      const content = await fs.readFile(entry.file);
+      const tar = createTarFile(entry.name, content);
+      await container.putArchive(Readable.from([tar]), { path: archivePath });
+    }
+  }
+
   private async provision(
     sessionId: string,
     userId: number,
@@ -199,6 +339,7 @@ export class LabOrchestrator {
     nonce: string
   ): Promise<CreatedResources> {
     const docker = getDocker();
+    const password = generatedPassword(nonce);
     const networkName = `cq-${sessionId.slice(0, 12)}`;
     const network = await docker.createNetwork({
       Name: networkName,
@@ -210,43 +351,113 @@ export class LabOrchestrator {
     const flagEnv = manifest.objectives.map(
       (objective) => `${envKeyFor(objective.id)}=${dynamicFlag(userId, objective.id, nonce)}`
     );
+    const targets = manifest.containers.targets ?? [];
+    const volumes = await this.createVolumes(docker, sessionId, userId, targets);
 
     try {
-      const targets = manifest.containers.targets ?? [];
       for (const target of targets) {
         const name = `cq-${sessionId.slice(0, 8)}-${target.name}`;
-        const env = [...flagEnv, ...Object.entries(target.env ?? {}).map(([key, value]) => `${key}=${value}`)];
+        const env = [...flagEnv, ...Object.entries(resolveEnv(target.env, password)).map(([key, value]) => `${key}=${value}`)];
+        const binds = (target.ephemeral_volumes ?? [])
+          .map((mountPath) => {
+            const volumeName = volumes.get(mountPath);
+            return volumeName ? `${volumeName}:${mountPath}` : null;
+          })
+          .filter((bind): bind is string => Boolean(bind));
+        const memoryBytes = (target.resources?.memory_mb ?? 512) * 1024 * 1024;
+        const nanoCpus = Math.round((target.resources?.cpus ?? 1) * 1_000_000_000);
         const options: ContainerCreateOptions = {
           name,
-          Image: target.image,
+          Image: resolvePlaceholders(target.image, password),
           Hostname: target.hostname ?? target.name,
+          Cmd: target.command,
           Env: env,
-          Labels: labelsFor(sessionId, userId, { 'cyberquest.role': 'target' }),
+          Labels: labelsFor(sessionId, userId, {
+            'cyberquest.role': 'target',
+            'cyberquest.name': target.name ?? 'target'
+          }),
           HostConfig: {
             NetworkMode: networkName,
+            Binds: binds,
             CapDrop: ['ALL'],
+            CapAdd: isPostgres(target) ? PG_CAPS : undefined,
             SecurityOpt: ['no-new-privileges'],
-            Memory: LAB_SECURITY.memoryBytes,
-            NanoCpus: LAB_SECURITY.nanoCpus,
+            Memory: memoryBytes,
+            NanoCpus: nanoCpus,
             PidsLimit: LAB_SECURITY.pidsLimit,
             Tmpfs: { '/tmp': 'rw,noexec,nosuid,size=64m' }
           }
         };
         const container = await docker.createContainer(options);
         created.containerIds.push(container.id);
+        const initFiles = (target.init_scripts ?? []).map((script) => ({
+          file: resolveLabFile(script),
+          name: path.basename(script)
+        }));
+        await this.copyIntoContainer(docker, container.id, '/docker-entrypoint-initdb.d', initFiles);
+        for (const file of target.files ?? []) {
+          await this.copyIntoContainer(docker, container.id, file.destination, [
+            { file: resolveLabFile(file.source), name: path.basename(file.source) }
+          ]);
+        }
         await container.start();
+        if (target.healthcheck?.cmd) {
+          await waitForCommand(
+            docker,
+            container.id,
+            target.healthcheck.cmd,
+            target.healthcheck.timeout_s ?? 60,
+            [`PGPASSWORD=${password}`, `PGDATABASE=${target.env?.POSTGRES_DB ?? 'postgres'}`]
+          );
+        }
       }
 
-      const attackerName = `cq-${sessionId.slice(0, 8)}-attacker`;
-      const attacker = await docker.createContainer({
-        name: attackerName,
-        Image: manifest.containers.attacker.image,
-        Hostname: manifest.containers.attacker.hostname ?? 'attacker',
-        Labels: labelsFor(sessionId, userId, { 'cyberquest.role': 'attacker' }),
+      const worker = manifest.containers.workstation
+        ? {
+            image: manifest.containers.workstation.image,
+            hostname: manifest.containers.workstation.hostname ?? 'workstation',
+            role: 'workstation',
+            name: 'workstation',
+            env: resolveEnv(manifest.containers.workstation.env, password),
+            capAdd: [] as string[]
+          }
+        : {
+            image: manifest.containers.attacker!.image,
+            hostname: manifest.containers.attacker!.hostname ?? 'attacker',
+            role: 'attacker',
+            name: 'attacker',
+            env: {} as Record<string, string>,
+            capAdd: ['NET_RAW'] as string[]
+          };
+      if (manifest.containers.workstation) {
+        const dbTarget = targets.find(isPostgres);
+        if (dbTarget) {
+          const defaults: Record<string, string> = {
+            PGHOST: dbTarget.hostname ?? dbTarget.name ?? 'db',
+            PGUSER: 'postgres',
+            PGPASSWORD: password,
+            PGDATABASE: resolveEnv(dbTarget.env, password).POSTGRES_DB ?? 'postgres'
+          };
+          for (const [key, value] of Object.entries(defaults)) {
+            if (!(key in worker.env)) worker.env[key] = value;
+          }
+        }
+      }
+
+      const workerEnv = Object.entries(worker.env).map(([key, value]) => `${key}=${value}`);
+      const workerContainer = await docker.createContainer({
+        name: `cq-${sessionId.slice(0, 8)}-${worker.name}`,
+        Image: resolvePlaceholders(worker.image, password),
+        Hostname: worker.hostname,
+        Env: workerEnv.length > 0 ? workerEnv : undefined,
+        Labels: labelsFor(sessionId, userId, {
+          'cyberquest.role': worker.role,
+          'cyberquest.name': worker.name
+        }),
         HostConfig: {
           NetworkMode: networkName,
           CapDrop: ['ALL'],
-          CapAdd: ['NET_RAW'],
+          CapAdd: worker.capAdd.length > 0 ? worker.capAdd : undefined,
           SecurityOpt: ['no-new-privileges'],
           Memory: LAB_SECURITY.memoryBytes,
           NanoCpus: LAB_SECURITY.nanoCpus,
@@ -254,14 +465,14 @@ export class LabOrchestrator {
           Tmpfs: { '/tmp': 'rw,nosuid,size=64m' }
         }
       });
-      created.containerIds.push(attacker.id);
-      await attacker.start();
+      created.containerIds.push(workerContainer.id);
+      await workerContainer.start();
 
       for (const target of targets) {
         if (!target.expose_web_port) continue;
         await waitForPort(
           docker,
-          attacker.id,
+          workerContainer.id,
           target.hostname ?? target.name ?? 'target',
           target.expose_web_port
         );
@@ -274,7 +485,7 @@ export class LabOrchestrator {
         const proxy = await docker.createContainer({
           name: `cq-${sessionId.slice(0, 8)}-proxy`,
           Image: 'cyberquest/proxy:latest',
-          Labels: labelsFor(sessionId, userId, { 'cyberquest.role': 'proxy' }),
+          Labels: labelsFor(sessionId, userId, { 'cyberquest.role': 'proxy', 'cyberquest.name': 'proxy' }),
           Cmd: ['socat', `TCP-LISTEN:8080,fork,reuseaddr`, `TCP:${targetHost}:${webTarget.expose_web_port}`],
           HostConfig: {
             NetworkMode: 'bridge',
@@ -297,12 +508,12 @@ export class LabOrchestrator {
 
       return created;
     } catch (error) {
-      await this.removeResources(created);
+      await this.removeResources(created, sessionId);
       throw error;
     }
   }
 
-  private async removeResources(resources: CreatedResources): Promise<void> {
+  private async removeResources(resources: CreatedResources, sessionId?: string): Promise<void> {
     const docker = getDocker();
     for (const containerId of resources.containerIds) {
       try {
@@ -320,6 +531,25 @@ export class LabOrchestrator {
         logger.warn({ err: error, networkId: resources.networkId }, 'Falha ao remover rede do lab');
       }
     }
+    if (sessionId) await this.removeVolumes(sessionId);
+  }
+
+  private async removeVolumes(sessionId: string): Promise<void> {
+    try {
+      const docker = getDocker();
+      const result = await docker.listVolumes({
+        filters: { label: [`cyberquest.session=${sessionId}`] }
+      });
+      for (const volume of result.Volumes ?? []) {
+        try {
+          await docker.getVolume(volume.Name).remove();
+        } catch (error) {
+          logger.warn({ err: error, volume: volume.Name }, 'Falha ao remover volume do lab');
+        }
+      }
+    } catch (error) {
+      logger.warn({ err: error, sessionId }, 'Falha ao listar volumes do lab');
+    }
   }
 
   private async rollback(sessionId: string): Promise<void> {
@@ -330,10 +560,21 @@ export class LabOrchestrator {
     } catch {
       containerIds = [];
     }
+    const docker = getDocker();
+    try {
+      const containers = await docker.listContainers({
+        all: true,
+        filters: { label: [`cyberquest.session=${sessionId}`] }
+      });
+      for (const container of containers) {
+        if (!containerIds.includes(container.Id)) containerIds.push(container.Id);
+      }
+    } catch {
+      // segue com os IDs conhecidos
+    }
     let networkId = row.network_id;
     if (!networkId) {
       try {
-        const docker = getDocker();
         const networks = await docker.listNetworks({
           filters: { label: ['cyberquest.session=' + sessionId] }
         });
@@ -342,7 +583,7 @@ export class LabOrchestrator {
         networkId = null;
       }
     }
-    await this.removeResources({ containerIds, networkId, proxyPorts: {} });
+    await this.removeResources({ containerIds, networkId, proxyPorts: {} }, sessionId);
   }
 
   async stop(sessionId: string, userId?: number): Promise<SessionRow> {
@@ -354,7 +595,7 @@ export class LabOrchestrator {
     } catch {
       containerIds = [];
     }
-    await this.removeResources({ containerIds, networkId: row.network_id, proxyPorts: {} });
+    await this.removeResources({ containerIds, networkId: row.network_id, proxyPorts: {} }, sessionId);
     this.db
       .prepare("UPDATE lab_sessions SET status = 'stopped', stopped_at = ? WHERE id = ?")
       .run(nowIso(), sessionId);
@@ -371,7 +612,7 @@ export class LabOrchestrator {
     } catch {
       containerIds = [];
     }
-    await this.removeResources({ containerIds, networkId: row.network_id, proxyPorts: {} });
+    await this.removeResources({ containerIds, networkId: row.network_id, proxyPorts: {} }, sessionId);
     this.db
       .prepare("UPDATE lab_sessions SET status = 'expired', stopped_at = ? WHERE id = ?")
       .run(nowIso(), sessionId);
@@ -395,6 +636,84 @@ export class LabOrchestrator {
       .prepare('UPDATE lab_sessions SET expires_at = ?, extended = 1 WHERE id = ?')
       .run(newExpires, sessionId);
     return this.getSessionRow(sessionId);
+  }
+
+  async verify(
+    sessionId: string,
+    userId: number,
+    objectiveId: string
+  ): Promise<VerifyOutcome> {
+    const row = this.getOwnedSession(sessionId, userId);
+    if (row.status !== 'running') {
+      throw new AppError(400, 'SESSION_NOT_RUNNING', 'A sessão não está ativa.');
+    }
+    const manifest = loadManifest(row.lab_slug);
+    const objective = manifest.objectives.find((item) => item.id === objectiveId);
+    if (!objective) throw new AppError(404, 'OBJECTIVE_NOT_FOUND', 'Objetivo não encontrado.');
+    const verify = objective.verify;
+    if (!verify) {
+      throw new AppError(400, 'NOT_VERIFIABLE', 'Este objetivo não tem verificação automática.');
+    }
+    const docker = getDocker();
+    const containers = await docker.listContainers({
+      all: true,
+      filters: {
+        label: [`cyberquest.session=${sessionId}`, `cyberquest.name=${verify.container}`]
+      }
+    });
+    const found = containers[0];
+    if (!found) {
+      throw new AppError(503, 'VERIFY_CONTAINER_MISSING', 'Container de verificação não encontrado.');
+    }
+    const password = generatedPassword(row.nonce);
+    const env = [
+      `PGPASSWORD=${password}`,
+      `PGUSER=${verify.user ?? 'postgres'}`,
+      `PGDATABASE=${verify.database ?? 'postgres'}`,
+      'PGHOST=127.0.0.1',
+      'PGDATA=/var/lib/postgresql/data'
+    ];
+    const cmd =
+      verify.type === 'sql'
+        ? ['psql', '-X', '-w', '-At', '-P', 'pager=off', '-v', 'ON_ERROR_STOP=1', '-c', verify.query]
+        : ['sh', '-c', verify.query];
+    let result: ExecResult;
+    try {
+      result = await runExec(docker, found.Id, cmd, {
+        user: verify.user ?? 'postgres',
+        env,
+        timeoutMs: 10_000
+      });
+    } catch (error) {
+      const message = error instanceof Error && error.message === 'timeout'
+        ? 'A verificação demorou mais de 10 segundos. Tente novamente.'
+        : 'Não foi possível executar a verificação.';
+      return { passed: false, message, objective };
+    }
+    const output = result.output.trim();
+    let passed = true;
+    if (verify.expect.equals !== undefined) {
+      passed = passed && output === verify.expect.equals.trim();
+    }
+    if (verify.expect.matches !== undefined) {
+      try {
+        passed = passed && new RegExp(verify.expect.matches, 'm').test(result.output);
+      } catch {
+        passed = false;
+      }
+    }
+    if (verify.expect.exit_code !== undefined) {
+      passed = passed && result.exitCode === verify.expect.exit_code;
+    }
+    return {
+      passed,
+      message: passed
+        ? 'Objetivo cumprido.'
+        : output
+          ? `Ainda não. Saída da verificação: ${output.slice(0, 300)}`
+          : `Ainda não. A verificação terminou com código ${result.exitCode}.`,
+      objective
+    };
   }
 
   async cleanupExpired(): Promise<number> {
@@ -436,6 +755,16 @@ export class LabOrchestrator {
           logger.warn({ err: error, id: network.Id }, 'Falha ao limpar rede órfã');
         }
       }
+      const volumes = await docker.listVolumes({
+        filters: { label: ['cyberquest.managed=true'] }
+      });
+      for (const volume of volumes.Volumes ?? []) {
+        try {
+          await docker.getVolume(volume.Name).remove();
+        } catch (error) {
+          logger.warn({ err: error, volume: volume.Name }, 'Falha ao limpar volume órfão');
+        }
+      }
       this.db
         .prepare(
           "UPDATE lab_sessions SET status = 'stopped', stopped_at = ? WHERE status IN ('starting','running')"
@@ -467,6 +796,7 @@ export class LabOrchestrator {
         id: objective.id,
         title: objective.title,
         xp: objective.xp,
+        mode: objective.verify ? ('auto' as const) : ('flag' as const),
         hints: (objective.hints ?? []).map((hint, index) => ({
           text: index < hintsUsed ? hint.text : '',
           costBits: hint.cost_bits
@@ -526,6 +856,7 @@ export class LabOrchestrator {
         id: objective.id,
         title: objective.title,
         xp: objective.xp,
+        mode: objective.verify ? ('auto' as const) : ('flag' as const),
         hints: (objective.hints ?? []).map((hint, index) => ({
           text: index < hintsUsed ? hint.text : '',
           costBits: hint.cost_bits

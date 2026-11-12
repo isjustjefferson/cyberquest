@@ -33,6 +33,8 @@ Itens fora do MVP ou que ainda impedem considerar o projeto "pronto para produç
 
 ## Labs
 
+- [ ] Labs opcionais de DBA: `pgbouncer` (pooling) e `monitoramento` (métricas/alertas). Ficaram fora da E5 por tempo; o conteúdo teórico já existe nos módulos 6 e 8.
+- [ ] Transformar o lab de PITR em uma recuperação real de WAL em uma segunda instância, hoje simulada com cópia de recuperação.
 - [ ] Teste manual documentado para cada um dos 10 labs após mudanças em `server.py`.
 - [ ] Ampliar cenários do alvo único sem criar regressão entre labs.
 - [ ] Adicionar healthcheck TCP real para o banner na porta 2222, além do HTTP.

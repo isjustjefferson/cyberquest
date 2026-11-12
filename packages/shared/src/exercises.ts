@@ -92,7 +92,36 @@ export const flagExerciseSchema = z.object({
   explanation: z.string()
 });
 
-export const exerciseSchema = z.discriminatedUnion('type', [
+const sqlGradeSchema = z.object({
+  mode: z.enum(['result_match', 'state_check', 'plan_check']),
+  expected_sql: z.string().min(1).optional(),
+  check_sql: z.string().min(1).optional(),
+  ordered: z.boolean().default(true),
+  compare_column_names: z.boolean().default(true),
+  numeric_tolerance: z.number().min(0).default(0.001),
+  must_contain: z.array(z.string()).default([]),
+  must_not_contain: z.array(z.string()).default([])
+});
+
+export const sqlQueryExerciseSchema = z.object({
+  type: z.literal('sql_query'),
+  ...base,
+  prompt: z.string(),
+  dataset: z.string().regex(/^[a-z0-9_]+$/),
+  setup: z.string().default(''),
+  starter: z.string().default(''),
+  grade: sqlGradeSchema,
+  hints: z
+    .array(
+      z.object({
+        text: z.string(),
+        cost_bits: z.number().int().min(0).default(0)
+      })
+    )
+    .default([])
+});
+
+const exerciseUnion = z.discriminatedUnion('type', [
   singleChoiceExerciseSchema,
   multiChoiceExerciseSchema,
   trueFalseExerciseSchema,
@@ -101,8 +130,33 @@ export const exerciseSchema = z.discriminatedUnion('type', [
   fillCommandExerciseSchema,
   simTerminalExerciseSchema,
   codeReviewExerciseSchema,
-  flagExerciseSchema
+  flagExerciseSchema,
+  sqlQueryExerciseSchema
 ]);
+
+export const exerciseSchema = exerciseUnion.superRefine((exercise, ctx) => {
+  if (exercise.type !== 'sql_query') return;
+  if (
+    (exercise.grade.mode === 'result_match' || exercise.grade.mode === 'state_check') &&
+    !exercise.grade.expected_sql
+  ) {
+    ctx.addIssue({ code: 'custom', message: 'expected_sql é obrigatório neste modo', path: ['grade', 'expected_sql'] });
+  }
+  if (exercise.grade.mode === 'state_check' && !exercise.grade.check_sql) {
+    ctx.addIssue({ code: 'custom', message: 'check_sql é obrigatório no modo state_check', path: ['grade', 'check_sql'] });
+  }
+  if (
+    exercise.grade.mode === 'plan_check' &&
+    exercise.grade.must_contain.length === 0 &&
+    exercise.grade.must_not_contain.length === 0
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'plan_check precisa de must_contain ou must_not_contain',
+      path: ['grade', 'must_contain']
+    });
+  }
+});
 
 export type Exercise = z.infer<typeof exerciseSchema>;
 export type ExerciseType = Exercise['type'];
@@ -116,6 +170,7 @@ export const lessonFrontmatterSchema = z.object({
   xp: z.number().int().min(0).default(30),
   status: z.enum(['complete', 'draft']).default('draft'),
   prerequisites: z.array(z.string()).optional().default([]),
+  related: z.array(z.string()).optional().default([]),
   lab_slug: z.string().optional().nullable(),
   exercises: z.array(exerciseSchema).default([])
 });
@@ -136,12 +191,35 @@ export const trackFrontmatterSchema = z.object({
   description: z.string().default(''),
   icon: z.string().default('🛡️'),
   color: z.string().default('verde'),
+  area: z.string().regex(/^[a-z0-9-]+$/).optional(),
   position: z.number().int().optional(),
   status: z.enum(['available', 'coming_soon']).default('available')
 });
 
+export const areaFrontmatterSchema = z.object({
+  slug: z.string().regex(/^[a-z0-9-]+$/),
+  title: z.string(),
+  description: z.string().default(''),
+  icon: z.string().default('📚'),
+  color: z.string().default('#00ff9c'),
+  position: z.number().int().optional(),
+  status: z.enum(['active', 'coming_soon']).default('active')
+});
+
+export const achievementFrontmatterSchema = z.object({
+  slug: z.string().regex(/^[a-z0-9-]+$/),
+  title: z.string(),
+  description: z.string(),
+  icon: z.string().default('🏅'),
+  rarity: z.enum(['comum', 'rara', 'epica', 'lendaria']).default('comum'),
+  area: z.string().regex(/^[a-z0-9-]+$/).optional().nullable(),
+  criteria: z.record(z.string(), z.unknown())
+});
+
 export type TrackFrontmatter = z.infer<typeof trackFrontmatterSchema>;
 export type ModuleFrontmatter = z.infer<typeof moduleFrontmatterSchema>;
+export type AreaFrontmatter = z.infer<typeof areaFrontmatterSchema>;
+export type AchievementFrontmatter = z.infer<typeof achievementFrontmatterSchema>;
 
 export interface PublicExercise {
   id: number;
@@ -185,6 +263,14 @@ export function publicExercisePayload(exercise: Exercise): Record<string, unknow
       return { question: exercise.question, code: exercise.code };
     case 'flag':
       return { question: exercise.question };
+    case 'sql_query':
+      return {
+        question: exercise.prompt,
+        prompt: exercise.prompt,
+        dataset: exercise.dataset,
+        starter: exercise.starter,
+        hints: exercise.hints.map((hint) => ({ text: hint.text, costBits: hint.cost_bits }))
+      };
     default:
       return {};
   }

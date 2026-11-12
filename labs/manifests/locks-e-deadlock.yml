@@ -1,0 +1,78 @@
+slug: "locks-e-deadlock"
+title: "Locks e deadlock"
+description: "Uma transação aberta trava um UPDATE na Padaria Byte. Diagnostique o bloqueio, libere a sessão correta e reproduza um deadlock."
+difficulty: 4
+ttl_minutes: 45
+xp_reward: 300
+network:
+  internal: true
+containers:
+  workstation:
+    image: "cyberquest/dba-workstation:latest"
+    hostname: "workstation"
+  targets:
+    - name: "db"
+      image: "postgres:16"
+      hostname: "db"
+      env:
+        POSTGRES_PASSWORD: "{{generated_password}}"
+        POSTGRES_DB: "padaria"
+      init_scripts:
+        - "content/datasets/padaria_byte.sql"
+        - "labs/sql/zz_locks_setup.sql"
+        - "labs/sql/zz_locks_blocker.sh"
+      ephemeral_volumes:
+        - "/var/lib/postgresql/data"
+      resources:
+        memory_mb: 512
+        cpus: 0.5
+      healthcheck:
+        cmd: "pg_isready -h 127.0.0.1 -U postgres"
+        timeout_s: 90
+terminal:
+  container: "workstation"
+  user: "student"
+objectives:
+  - id: "quem-bloqueia"
+    title: "Identifique a espera por lock em pg_locks"
+    xp: 100
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: "SELECT (count(*) > 0)::text FROM pg_locks WHERE NOT granted;"
+      expect:
+        equals: "true"
+    hints:
+      - text: "Relacione pg_locks com pg_stat_activity para ver quem espera e quem bloqueia."
+        cost_bits: 10
+  - id: "liberar-bloqueio"
+    title: "Libere o bloqueio sem perder dados"
+    xp: 100
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: "SELECT (count(*) = 0)::text FROM pg_locks WHERE NOT granted;"
+      expect:
+        equals: "true"
+    hints:
+      - text: "Encerre apenas a sessão que mantém o lock: SELECT pg_terminate_backend(<pid>);"
+        cost_bits: 12
+  - id: "reproduzir-deadlock"
+    title: "Reproduza um deadlock no laboratório"
+    xp: 100
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: "SELECT (deadlocks > 0)::text FROM pg_stat_database WHERE datname = current_database();"
+      expect:
+        equals: "true"
+    hints:
+      - text: "Abra duas sessões psql: cada uma bloqueia uma linha e depois tenta atualizar a linha da outra, na ordem inversa."
+        cost_bits: 14
+writeup: "writeups/locks-e-deadlock.md"

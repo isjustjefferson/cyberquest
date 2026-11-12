@@ -1,0 +1,5 @@
+slug: "05-desempenho-e-tuning"
+title: "Desempenho e tuning"
+description: "Índices, planos, estatísticas, MVCC, locks, pg_stat_statements, configuração e particionamento na Padaria Byte."
+position: 4
+xp_reward: 250

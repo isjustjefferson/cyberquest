@@ -134,9 +134,13 @@ export function Lesson() {
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_300px]">
       <div className="min-w-0 space-y-5">
-        <Link to={`/trilhas/${lesson.trackSlug}`} className="inline-flex items-center gap-2 text-sm text-muted hover:text-text">
-          <ArrowLeft size={15} /> {lesson.trackTitle}
-        </Link>
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted">
+          <Link to={`/areas/${lesson.areaSlug}`} className="inline-flex items-center gap-2 hover:text-text">
+            <ArrowLeft size={15} /> {lesson.areaTitle}
+          </Link>
+          <span className="opacity-40">/</span>
+          <Link to={`/trilhas/${lesson.trackSlug}`} className="hover:text-text">{lesson.trackTitle}</Link>
+        </div>
 
         <header className="card p-5 md:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">

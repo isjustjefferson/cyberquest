@@ -1,0 +1,93 @@
+slug: "roles-e-privilegios"
+title: "Roles e privilégios"
+description: "Monte o modelo de acesso da Padaria Byte: leitura, escrita e privilégios padrão com o menor privilégio possível."
+difficulty: 3
+ttl_minutes: 40
+xp_reward: 250
+network:
+  internal: true
+containers:
+  workstation:
+    image: "cyberquest/dba-workstation:latest"
+    hostname: "workstation"
+  targets:
+    - name: "db"
+      image: "postgres:16"
+      hostname: "db"
+      env:
+        POSTGRES_PASSWORD: "{{generated_password}}"
+        POSTGRES_DB: "padaria"
+      init_scripts:
+        - "content/datasets/padaria_byte.sql"
+      ephemeral_volumes:
+        - "/var/lib/postgresql/data"
+      healthcheck:
+        cmd: "pg_isready -h 127.0.0.1 -U postgres"
+        timeout_s: 90
+terminal:
+  container: "workstation"
+  user: "student"
+objectives:
+  - id: "app-ro"
+    title: "Crie app_ro com leitura nas tabelas de public"
+    xp: 60
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: >-
+        SELECT count(*) > 0 FROM information_schema.role_table_grants
+        WHERE grantee = 'app_ro' AND privilege_type = 'SELECT' AND table_schema = 'public';
+      expect:
+        equals: "t"
+    hints:
+      - text: "CREATE ROLE app_ro LOGIN PASSWORD 'app_ro'; GRANT USAGE ON SCHEMA public TO app_ro; GRANT SELECT ON ALL TABLES IN SCHEMA public TO app_ro;"
+        cost_bits: 10
+  - id: "app-rw"
+    title: "Crie app_rw com leitura e escrita, sem apagar clientes"
+    xp: 70
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: >-
+        SELECT (has_table_privilege('app_rw', 'clientes', 'INSERT,UPDATE')
+        AND NOT has_table_privilege('app_rw', 'clientes', 'DELETE'))::text;
+      expect:
+        equals: "true"
+    hints:
+      - text: "Crie o papel e conceda SELECT, INSERT, UPDATE nas tabelas. Não conceda DELETE em clientes."
+        cost_bits: 12
+  - id: "default-privileges"
+    title: "Garanta SELECT a app_ro em tabelas futuras"
+    xp: 60
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: >-
+        SELECT count(*) > 0 FROM pg_default_acl
+        WHERE defaclnamespace = 'public'::regnamespace AND defaclacl::text LIKE '%app_ro%';
+      expect:
+        equals: "t"
+    hints:
+      - text: "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO app_ro;"
+        cost_bits: 12
+  - id: "public-temp"
+    title: "Revogue o privilégio TEMP de PUBLIC no banco"
+    xp: 60
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: "SELECT NOT has_database_privilege('public', 'padaria', 'TEMP');"
+      expect:
+        equals: "t"
+    hints:
+      - text: "REVOKE TEMP ON DATABASE padaria FROM PUBLIC;"
+        cost_bits: 8
+writeup: "writeups/roles-e-privilegios.md"

@@ -37,6 +37,10 @@ export const labHintSchema = z.object({
   objectiveId: z.string().min(1)
 });
 
+export const labVerifySchema = z.object({
+  objectiveId: z.string().min(1)
+});
+
 export const avatarSchema = z.object({
   avatarId: z.string().min(1).max(60)
 });

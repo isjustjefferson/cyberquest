@@ -1,0 +1,80 @@
+slug: "vacuum-e-bloat"
+title: "Vacuum e bloat"
+description: "Um lote de atualizações inchou a tabela pedidos e uma transação esquecida impede a limpeza. Resolva o bloat e ajuste o autovacuum da tabela."
+difficulty: 4
+ttl_minutes: 45
+xp_reward: 300
+network:
+  internal: true
+containers:
+  workstation:
+    image: "cyberquest/dba-workstation:latest"
+    hostname: "workstation"
+  targets:
+    - name: "db"
+      image: "postgres:16"
+      hostname: "db"
+      env:
+        POSTGRES_PASSWORD: "{{generated_password}}"
+        POSTGRES_DB: "padaria"
+      init_scripts:
+        - "content/datasets/padaria_byte.sql"
+        - "labs/sql/zz_vacuum_setup.sql"
+        - "labs/sql/zz_vacuum_idle.sh"
+      ephemeral_volumes:
+        - "/var/lib/postgresql/data"
+      resources:
+        memory_mb: 512
+        cpus: 0.5
+      healthcheck:
+        cmd: "pg_isready -h 127.0.0.1 -U postgres"
+        timeout_s: 90
+terminal:
+  container: "workstation"
+  user: "student"
+objectives:
+  - id: "sessao-esquecida"
+    title: "Encontre e encerre a sessão que segura a limpeza"
+    xp: 80
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: >-
+        SELECT (count(*) = 0)::text FROM pg_stat_activity
+        WHERE query ILIKE '%pg_sleep%' AND pid <> pg_backend_pid();
+      expect:
+        equals: "true"
+    hints:
+      - text: "Consulte pg_stat_activity, ache o pid com pg_sleep e rode SELECT pg_terminate_backend(<pid>);"
+        cost_bits: 10
+  - id: "vacuum-analyze"
+    title: "Execute VACUUM (ANALYZE) e reduza as tuplas mortas"
+    xp: 100
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: "SELECT (n_dead_tup < 50)::text FROM pg_stat_user_tables WHERE relname = 'pedidos';"
+      expect:
+        equals: "true"
+    hints:
+      - text: "Rode VACUUM (ANALYZE) pedidos; e consulte pg_stat_user_tables."
+        cost_bits: 12
+  - id: "autovacuum-tabela"
+    title: "Ajuste autovacuum_vacuum_scale_factor na tabela"
+    xp: 120
+    verify:
+      type: "sql"
+      container: "db"
+      user: "postgres"
+      database: "padaria"
+      query: "SELECT coalesce(array_to_string(reloptions, ','), '') FROM pg_class WHERE relname = 'pedidos';"
+      expect:
+        matches: "autovacuum_vacuum_scale_factor=0\\.(0[0-9]|1)\\b"
+    hints:
+      - text: "ALTER TABLE pedidos SET (autovacuum_enabled = true, autovacuum_vacuum_scale_factor = 0.05);"
+        cost_bits: 14
+writeup: "writeups/vacuum-e-bloat.md"

@@ -66,6 +66,10 @@ docker compose down
 | `DOCKER_SOCKET` | `/var/run/docker.sock` | Socket usado pelo dockerode |
 | `CONTENT_DIR` | `../../content` | Diretório do currículo |
 | `LABS_DIR` | `../../labs` | Diretório dos manifests/writeups |
+| `SQL_MAX_CONCURRENT` | `2` | Execuções SQL simultâneas no motor PGlite |
+| `SQL_TIMEOUT_MS` | `3000` | Timeout de execução SQL em milissegundos |
+| `SQL_MAX_ROWS` | `500` | Limite de linhas devolvidas por consulta |
+| `SQL_MAX_SQL_BYTES` | `10240` | Tamanho máximo do SQL enviado |
 
 Em produção a API recusa iniciar com os segredos padrão.
 
@@ -77,8 +81,8 @@ pnpm build          # build de todos os pacotes
 pnpm test           # Vitest em shared e API
 pnpm lint           # ESLint com zero warnings
 pnpm seed           # sincroniza content/ e labs/ no SQLite
-pnpm labs-build     # constrói cyberquest/{attacker,target,proxy}
-pnpm labs-clean     # remove containers/redes com cyberquest.managed=true
+pnpm labs-build     # constrói cyberquest/{attacker,target,proxy,dba-workstation}
+pnpm labs-clean     # remove containers, redes e volumes com cyberquest.managed=true
 pnpm audit          # auditoria de dependências
 docker compose up -d # API + web em containers (porta 8080)
 make dev|build|test|lint|seed|labs-build|labs-clean
@@ -91,7 +95,7 @@ apps/api            Express + TypeScript + SQLite + dockerode
 apps/web            React 18 + Vite + Tailwind + xterm.js
 packages/shared     Tipos, schemas zod e regras puras de gamificação
 content/tracks/     Trilhas, módulos e lições em YAML/Markdown
-labs/images/        Dockerfiles das imagens attacker/target/proxy
+labs/images/        Dockerfiles das imagens attacker/target/proxy/dba-workstation
 labs/manifests/     Contratos dos labs e objetivos
 labs/writeups/      Soluções liberadas após a conclusão
 scripts/            Build/limpeza dos labs e cópia de assets
@@ -101,10 +105,10 @@ docs/               Guias, decisões e backlog
 ## O que está implementado
 
 - Cadastro, login, logout, sessão httpOnly e configurações de perfil.
-- 11 trilhas, 31 módulos e 104 lições; Trilhas 0–3 completas e Trilhas 4–9 com amostra completa + esqueletos reais.
-- Exercícios de múltipla escolha, múltipla resposta, verdadeiro/falso, ordenação, associação, completar comando, terminal simulado, code review e flag.
+- 2 áreas, 12 trilhas, 40 módulos e 187 lições; Cibersegurança com Trilhas 0–3 completas e Trilhas 4–9 com amostra + esqueletos reais; Bancos de Dados com a trilha DBA PostgreSQL em 9 módulos (fundamentos, SQL, modelagem, administração, desempenho, backup/HA, programação, operação e carreira).
+- Exercícios de múltipla escolha, múltipla resposta, verdadeiro/falso, ordenação, associação, completar comando, terminal simulado, code review, flag e consultas SQL reais com PGlite.
 - XP, níveis, títulos, Bits, streak com congelamento, conquistas, ranking, desafio diário, revisão espaçada, loja e mascote Byte.
-- 10 labs Docker com terminal web, rede interna, flags HMAC por sessão, dicas pagas, writeup e limpeza por TTL.
+- 20 labs Docker com terminal web, rede interna, flags HMAC por sessão ou verificação automática de objetivos, dicas pagas, writeup e limpeza por TTL. A trilha DBA tem 10 labs principais, incluindo replicação em streaming e o plantão da Padaria Byte.
 - Painel, mapa de trilhas, lições, labs, ranking, conquistas, loja, perfil, configurações e páginas de erro.
 
 ## Segurança
@@ -113,7 +117,7 @@ docs/               Guias, decisões e backlog
 - CSRF por validação de `Origin` + SameSite; rate limit no login e nas rotas gerais.
 - Toda entrada validada com zod; SQL sempre parametrizado; gabaritos e flags nunca aparecem em endpoints de leitura.
 - Labs: `cap-drop ALL`, `no-new-privileges`, sem `privileged`, sem montar o socket Docker dentro dos containers, limites de CPU/memória/PIDs, rede interna, TTL e labels de limpeza.
-- O container `attacker` não recebe flags. Cada flag é derivada de `HMAC(userId:objetivo:nonce)`.
+- O container `attacker`/`workstation` não recebe flags. Cada flag é derivada de `HMAC(userId:objetivo:nonce)`; labs DBA verificam o estado real do PostgreSQL sem expor gabaritos.
 
 ## Testes
 
@@ -121,7 +125,7 @@ docs/               Guias, decisões e backlog
 pnpm test
 ```
 
-Cobertura atual: regras de gamificação, SM-2, payload público sem gabaritos, correção de todos os tipos de exercício, HMAC de flags, orquestrador de labs com Docker mockado (provisionamento, rollback, stop, expiração e extensão), bloqueio sem autenticação, registro, progresso, desbloqueio da próxima lição, XP idempotente, ranking e contagens do catálogo. São 25 testes.
+Cobertura atual: regras de gamificação, SM-2, payload público sem gabaritos, correção de todos os tipos de exercício, HMAC de flags, manifesto de labs antigos e DBA, orquestrador com Docker mockado (provisionamento, volumes, verificação, rollback, stop, expiração e extensão), smoke test Docker opcional (incluindo PITR, replicação e plantão), motor SQL com PGlite, desafio diário e revisão com SQL, conquistas DBA, bloqueio sem autenticação, registro, progresso, desbloqueio da próxima lição, XP idempotente, ranking e contagens do catálogo. São 49 testes (7 shared + 42 API, incluindo os testes Docker opcionais).
 
 ## Adicionar conteúdo e labs
 

@@ -11,7 +11,6 @@ export function getDocker(): Docker {
 }
 
 export async function isDockerAvailable(): Promise<boolean> {
-  if (config.isTest) return false;
   try {
     const docker = getDocker();
     await Promise.race([

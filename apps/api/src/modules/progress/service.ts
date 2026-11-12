@@ -18,7 +18,7 @@ export interface LessonCompletionResult {
 
 export function completeLesson(db: DB, userId: number, lessonSlug: string): LessonCompletionResult {
   const lesson = findLessonBySlug(db, lessonSlug);
-  const info = progressMap(db, userId).get(lesson.id);
+  const info = progressMap(db, userId, lesson.area_slug).get(lesson.id);
   if (!info || info.status === 'locked') {
     throw new AppError(403, 'LESSON_LOCKED', 'Esta lição ainda está bloqueada.');
   }
@@ -38,7 +38,9 @@ export function completeLesson(db: DB, userId: number, lessonSlug: string): Less
   const stars = starsForLesson(wrongAttempts, exerciseCount);
   const perfect = exerciseCount > 0 && wrongAttempts === 0;
   const bonusXp = perfect ? perfectLessonBonus(lesson.xp_reward) : 0;
-  const xpGained = already ? 0 : grantXp(db, userId, 'lesson', lesson.slug, lesson.xp_reward + bonusXp);
+  const xpGained = already
+    ? 0
+    : grantXp(db, userId, 'lesson', lesson.slug, lesson.xp_reward + bonusXp, new Date(), lesson.area_id);
   const bitsGained = xpGained > 0 ? grantBits(db, userId, `lesson_${lesson.slug}`, XP.bitsPerLesson) : 0;
 
   db.prepare(
@@ -65,7 +67,7 @@ export function completeLesson(db: DB, userId: number, lessonSlug: string): Less
     .get(lesson.module_id) as { slug: string; xp_reward: number };
   let moduleCompleted = false;
   if ((moduleTotals.done ?? 0) >= moduleTotals.total && moduleRow.xp_reward > 0) {
-    const gained = grantXp(db, userId, 'module', moduleRow.slug, moduleRow.xp_reward);
+    const gained = grantXp(db, userId, 'module', moduleRow.slug, moduleRow.xp_reward, new Date(), lesson.area_id);
     if (gained > 0) {
       moduleCompleted = true;
       grantBits(db, userId, `module_${moduleRow.slug}`, 15);

@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import type { AnswerResult, PublicExercise } from '@cyberquest/shared';
 import { extractBlanks } from '@cyberquest/shared';
 import { Check, ChevronDown, ChevronUp, RotateCcw, Send, X } from 'lucide-react';
 import { SimTerminal, type SimState } from './SimTerminal';
 import { Markdown } from './Markdown';
+
+const SqlQueryExercise = lazy(() =>
+  import('./SqlQueryExercise').then((module) => ({ default: module.SqlQueryExercise }))
+);
 
 interface Props {
   exercise: PublicExercise;
@@ -382,7 +386,40 @@ export function ExerciseRenderer({
         </div>
       ) : null}
 
-      {result ? (
+      {exercise.type === 'sql_query' ? (
+        <Suspense fallback={<p className="text-xs text-muted">Carregando editor SQL...</p>}>
+          <SqlQueryExercise
+            exercise={exercise}
+            result={result}
+            disabled={disabled}
+            submitting={submitting}
+            onAnswer={onSubmit}
+          />
+        </Suspense>
+      ) : null}
+
+      {exercise.type === 'sql_query' ? (
+        result ? (
+          <div
+            className={`mt-4 rounded-xl border p-3 text-sm ${
+              result.correct ? 'border-accent/30 bg-accent/5' : 'border-danger/30 bg-danger/5'
+            }`}
+          >
+            <p className={`flex items-center gap-2 font-semibold ${result.correct ? 'text-accent' : 'text-danger'}`}>
+              {result.correct ? <Check size={16} /> : <X size={16} />}
+              {result.correct ? `Correto!${result.xpGained ? ` +${result.xpGained} XP` : ''}` : 'Resposta incorreta'}
+            </p>
+            <div className="mt-1 text-text/80">
+              <Markdown content={result.explanation || 'Sem explicação adicional.'} />
+            </div>
+            {!result.correct ? (
+              <button type="button" className="btn-secondary mt-3" onClick={onRetry}>
+                <RotateCcw size={14} /> Tentar novamente
+              </button>
+            ) : null}
+          </div>
+        ) : null
+      ) : result ? (
         <div
           className={`mt-4 rounded-xl border p-3 text-sm ${
             result.correct ? 'border-accent/30 bg-accent/5' : 'border-danger/30 bg-danger/5'
